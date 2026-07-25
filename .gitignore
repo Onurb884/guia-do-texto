@@ -1,0 +1,15 @@
+# Banco de Dados e Midia
+db.sqlite3
+media/
+
+# Arquivos temporarios do Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ambientes Virtuais
+venv/
+env/
+
+# O Cofre de Senhas (MUITO IMPORTANTE)
+.env
