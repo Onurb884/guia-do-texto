@@ -94,7 +94,7 @@ function TrabalheConosco() {
       await axios.post('http://127.0.0.1:8000/api/candidatura-corretor/', data, {
           headers: { 'Content-Type': 'multipart/form-data' }
       });
-      toast({ title: "Candidatura enviada!", description: "A nossa equipa vai analisar o seu perfil.", status: "success", duration: 5000 });
+      toast({ title: "Candidatura enviada!", description: "A nossa equipe vai analisar o seu perfil.", status: "success", duration: 5000 });
       navigate('/'); 
     } catch (error) {
       toast({ title: "Erro no envio", description: error.response?.data?.erro || "Verifique os dados informados.", status: "error" });

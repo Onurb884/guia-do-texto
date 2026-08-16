@@ -8,13 +8,17 @@ from .views import (
     GestaoRedacoesView, ToggleUrgenciaView, ForcarLiberacaoView, ConfiguracaoView,
     GestaoUsuariosViewSet, MinhaCarteiraView, 
     ReportarProblemaView, GerarLinkPagamentoCartaoView, ProcessarRetornoMercadoPagoView,
-    GestaoFinanceiraView, BaixarPagamentoCorretorView, PacoteViewSet, 
+    GestaoFinanceiraView, PacoteViewSet, 
     CupomViewSet, ValidarCupomView, MinhaCarteiraAlunoView, ComprarPacoteView, 
     ComprarAvulsoView, BannerVitrineViewSet, CorrecaoIAView, ResolverAuditoriaView, 
     MaterialApoioViewSet, SolicitarRecuperacaoSenhaView, ConfirmarRedefinicaoSenhaView, 
     AdicionarCreditoManualView, GerarPagamentoPixView, VerificarStatusPixView, 
     VerificarPagamentoMPView, LoginView, CadastrarUsuarioView, GoogleLoginView, 
-    CandidaturaCorretorView
+    CandidaturaCorretorView, AssistenteSuporteView,
+    
+    # NOVAS ROTAS DO FLUXO RPA
+    SolicitarSaqueView, EnviarReciboCorretorView, 
+    BaixarPagamentoView, RecusarReciboView
 )
 
 router = DefaultRouter()
@@ -33,6 +37,7 @@ urlpatterns = [
     path('redefinir-senha/<str:uidb64>/<str:token>/', ConfirmarRedefinicaoSenhaView.as_view(), name='confirmar_redefinicao'),
     path('cadastrar/', CadastrarUsuarioView.as_view(), name='cadastro_aluno'),
     path('auth/google/', GoogleLoginView.as_view(), name='login_google'),
+    path('chat-assistente/', AssistenteSuporteView.as_view(), name='chat_assistente'),
     
     path('', include(router.urls)),
 
@@ -57,9 +62,14 @@ urlpatterns = [
     path('gestao/redacoes/<int:pk>/liberar/', ForcarLiberacaoView.as_view(), name='forcar_liberacao'),
     path('gestao/configuracoes/', ConfiguracaoView.as_view(), name='gestao_config'),
     
-    # --- ROTAS FINANCEIRAS EXCLUSIVAS DO DASHBOARD ---
+    # --- NOVAS ROTAS RPA (CORRETOR) ---
+    path('corretor/solicitar-saque/', SolicitarSaqueView.as_view(), name='corretor-solicitar-saque'),
+    path('corretor/pagamento/<int:pk>/enviar-recibo/', EnviarReciboCorretorView.as_view(), name='corretor-enviar-recibo'),
+
+    # --- NOVAS ROTAS RPA E DASHBOARD (GESTOR) ---
     path('gestao/financeiro/dashboard/', GestaoFinanceiraView.as_view(), name='gestao_financeira_dashboard'),
-    path('gestao/financeiro/baixar-pagamento/<int:corretor_id>/', BaixarPagamentoCorretorView.as_view(), name='baixar_pagamento'),
+    path('gestao/financeiro/baixar-pagamento/<int:pk>/', BaixarPagamentoView.as_view(), name='financeiro-baixar-pagamento'),
+    path('gestao/financeiro/recusar-recibo/<int:pk>/', RecusarReciboView.as_view(), name='financeiro-recusar-recibo'),
 
     path('aluno/carteira/', MinhaCarteiraAlunoView.as_view(), name='carteira_aluno'),
     path('loja/validar-cupom/', ValidarCupomView.as_view(), name='validar_cupom'),

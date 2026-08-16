@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from .models import Redacao, Tema, Correcao, NotaCompetencia, Anotacao, TextoMotivador
 from .models import RespostaRapida, ConfiguracaoSistema, Carteira, Transacao, Pacote, Cupom, CarteiraAluno
 from .models import BannerVitrine, HistoricoCompra
-from .models import MaterialApoio
+from .models import MaterialApoio, PagamentoCorretor
 
 User = get_user_model()
 
@@ -22,16 +22,86 @@ class TransacaoSerializer(serializers.ModelSerializer):
         model = Transacao
         fields = '__all__'
 
+# --- NOVO: SERIALIZADOR DE PAGAMENTOS COM RECIBO ---
+class PagamentoCorretorSerializer(serializers.ModelSerializer):
+    arquivo_recibo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PagamentoCorretor
+        fields = [
+            'id', 'valor', 'qtd_normal', 'qtd_vip', 'status', 
+            'arquivo_recibo', 'arquivo_recibo_url', 'motivo_recusa', 
+            'data_solicitacao', 'data_pagamento'
+        ]
+
+    def get_arquivo_recibo_url(self, obj):
+        if obj.arquivo_recibo:
+            return obj.arquivo_recibo.url
+        return None
+
+# --- ATUALIZADO: CARTEIRA COM SOLICITAÇÃO ATIVA ---
 class CarteiraSerializer(serializers.ModelSerializer):
     transacoes = serializers.SerializerMethodField()
+    historico_pagamentos = serializers.SerializerMethodField()
+    solicitacao_ativa = serializers.SerializerMethodField()
+    
     class Meta:
         model = Carteira
-        fields = ['saldo_atual', 'transacoes']
+        fields = ['saldo_atual', 'saque_solicitado', 'qtd_normal_pendente', 'qtd_vip_pendente', 'transacoes', 'historico_pagamentos', 'solicitacao_ativa']
     
-    def get_transacoes(self, obj):
-        transacoes = obj.corretor.transacoes.all().order_by('-data')[:50]
-        return TransacaoSerializer(transacoes, many=True).data
+    def get_solicitacao_ativa(self, obj):
+        pendente = PagamentoCorretor.objects.filter(
+            corretor=obj.corretor,
+            status__in=['AGUARDANDO_RECIBO', 'EM_ANALISE', 'RECUSADO']
+        ).order_by('-data_solicitacao').first()
+        if pendente:
+            return PagamentoCorretorSerializer(pendente).data
+        return None
 
+    def get_transacoes(self, obj):
+        from .models import Correcao, ConfiguracaoSistema, PagamentoCorretor
+        
+        ultimo_pagamento = PagamentoCorretor.objects.filter(corretor=obj.corretor, status='PAGO').order_by('-data_pagamento').first()
+        data_ultimo_pagamento = ultimo_pagamento.data_pagamento if ultimo_pagamento else None
+
+        correcoes = Correcao.objects.filter(
+            corretor=obj.corretor,
+            redacao__status='CORRIGIDA'
+        ).order_by('-data_correcao')[:50]
+        
+        config = ConfiguracaoSistema.objects.first()
+        val_simples = config.valor_pagamento_simples if config else 3.00
+        val_enem = config.valor_pagamento_enem if config else 4.00
+        val_vip = config.valor_bonus_vip if config else 1.50
+        
+        historico = []
+        for c in correcoes:
+            tipo = c.redacao.tema.tipo if c.redacao.tema else 'ENEM'
+            base = val_simples if tipo == 'SIMPLES' else val_enem
+            bonus = val_vip if (c.redacao.is_urgente or getattr(c.redacao, 'vip_pago', False)) else 0
+            
+            descricao = f"Correção {tipo} (#{c.redacao.id})"
+            if bonus > 0:
+                descricao += " + Bônus Especial"
+            
+            foi_pago = False
+            if data_ultimo_pagamento and c.data_correcao <= data_ultimo_pagamento:
+                foi_pago = True
+                
+            historico.append({
+                'id': c.id,
+                'data': c.data_correcao,
+                'descricao': descricao,
+                'tipo': 'CREDITO',
+                'valor': base + bonus,
+                'foi_pago': foi_pago
+            })
+        return historico
+
+    def get_historico_pagamentos(self, obj):
+        pgtos = PagamentoCorretor.objects.filter(corretor=obj.corretor).order_by('-data_solicitacao')
+        return PagamentoCorretorSerializer(pgtos, many=True).data
+    
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
     class Meta:

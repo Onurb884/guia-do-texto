@@ -11,13 +11,17 @@ import {
   PopoverArrow, PopoverCloseButton, PopoverHeader, PopoverBody,
   Input, Divider, Spinner, SimpleGrid, Stat, StatLabel, StatNumber, 
   InputGroup, InputLeftElement, Switch, FormControl, FormLabel, 
-  Alert, AlertIcon, Table, Thead, Tbody, Tr, Th, Td, Image, Portal, GridItem
+  Alert, AlertIcon, Table, Thead, Tbody, Tr, Th, Td, Image, Portal, GridItem,
+  Tabs, TabList, TabPanels, Tab, TabPanel,
+  Stepper, Step, StepIndicator, StepStatus, StepIcon, StepNumber, 
+  StepTitle, StepDescription, StepSeparator
 } from '@chakra-ui/react';
 import { 
   ViewIcon, ViewOffIcon, DeleteIcon, AddIcon, EditIcon, 
   TimeIcon, SearchIcon, CheckCircleIcon, WarningTwoIcon, 
   InfoIcon, ArrowBackIcon, StarIcon, WarningIcon, DownloadIcon, AttachmentIcon, ChatIcon
 } from '@chakra-ui/icons';
+import { MdAttachMoney, MdAccountBalanceWallet } from 'react-icons/md';
 
 const UserIcon = (props) => <Icon viewBox="0 0 24 24" {...props}><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></Icon>;
 
@@ -28,18 +32,12 @@ const CustomPinSVG = ({ cor, numero }) => (
     </Box>
 );
 
-// ATUALIZADO: Mais opções de erros de gramática
 const ERROS_GRAMATICA = [
-    { label: 'Ortografia', value: 'ORTOGRAFIA' }, 
-    { label: 'Acentuação', value: 'ACENTUACAO' }, 
-    { label: 'Pontuação', value: 'PONTUACAO' }, 
-    { label: 'Concordância', value: 'CONCORDANCIA' }, 
-    { label: 'Regência', value: 'REGENCIA' }, 
-    { label: 'Crase', value: 'CRASE' }, 
-    { label: 'Colocação Pronominal', value: 'COLOCACAO_PRONOMINAL' }, 
-    { label: 'Translineação', value: 'TRANSLINEACAO' }, 
-    { label: 'Impropriedade Vocabular', value: 'IMPROPRIEDADE_VOCABULAR' }, 
-    { label: 'Outros', value: 'OUTROS' }
+    { label: 'Ortografia', value: 'ORTOGRAFIA' }, { label: 'Acentuação', value: 'ACENTUACAO' }, 
+    { label: 'Pontuação', value: 'PONTUACAO' }, { label: 'Concordância', value: 'CONCORDANCIA' }, 
+    { label: 'Regência', value: 'REGENCIA' }, { label: 'Crase', value: 'CRASE' }, 
+    { label: 'Colocação Pronominal', value: 'COLOCACAO_PRONOMINAL' }, { label: 'Translineação', value: 'TRANSLINEACAO' }, 
+    { label: 'Impropriedade Vocabular', value: 'IMPROPRIEDADE_VOCABULAR' }, { label: 'Outros', value: 'OUTROS' }
 ];
 
 const COMPETENCIAS_ENEM = [
@@ -66,27 +64,64 @@ const INFOS_MANUAL = {
     'OUTROS': { nome: 'Geral', cor: 'gray', icone: AttachmentIcon }
 };
 
+function valorPorExtenso(valorOriginal) {
+    if (!valorOriginal || parseFloat(valorOriginal) === 0) return 'zero reais';
+    const valor = parseFloat(valorOriginal);
+    const extenso = {
+        unidades: ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"],
+        dez_a_dezenove: ["dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"],
+        dezenas: ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"],
+        centenas: ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"]
+    };
+
+    function converteGrupo(n) {
+        if (n === 0) return "";
+        if (n === 100) return "cem";
+        let c = Math.floor(n / 100);
+        let d = Math.floor((n % 100) / 10);
+        let u = n % 10;
+        let res = extenso.centenas[c];
+        let resto = n % 100;
+        if (res && resto > 0) res += " e ";
+        if (resto >= 10 && resto <= 19) { res += extenso.dez_a_dezenove[resto - 10]; } 
+        else {
+            if (d >= 2) { res += extenso.dezenas[d]; if (u > 0) res += " e "; }
+            if (u > 0 && resto >= 20 || u > 0 && d === 0) { res += extenso.unidades[u]; }
+        }
+        return res;
+    }
+
+    let reais = Math.floor(valor);
+    let centavos = Math.round((valor - reais) * 100);
+    let texto = [];
+    if (reais > 0) {
+        let milhares = Math.floor(reais / 1000); let restoReais = reais % 1000;
+        if (milhares > 0) { texto.push(milhares === 1 ? "mil" : converteGrupo(milhares) + " mil"); if (restoReais > 0 && restoReais <= 100) texto.push("e"); }
+        if (restoReais > 0) texto.push(converteGrupo(restoReais)); texto.push(reais === 1 ? "real" : "reais");
+    }
+    if (centavos > 0) { if (reais > 0) texto.push("e"); texto.push(converteGrupo(centavos)); texto.push(centavos === 1 ? "centavo" : "centavos"); }
+    return texto.join(" ").replace(/\s+/g, ' ').trim();
+}
+
 function PainelCorretor() { 
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
   
-  const [usuario, setUsuario] = useState({ first_name: 'Corretor', id: null });
+  const [usuario, setUsuario] = useState({ first_name: 'Corretor', last_name: '', cpf: '', id: null });
   const [fila, setFila] = useState([]);
   const [historico, setHistorico] = useState([]); 
-  const [carteira, setCarteira] = useState({ saldo_atual: 0, transacoes: [] });
+  const [carteira, setCarteira] = useState({ saldo_atual: 0, transacoes: [], historico_pagamentos: [], solicitacao_ativa: null });
   const [materiais, setMateriais] = useState([]);
 
-  // URL State
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
   const [aba, setAba] = useState('fila');
 
-  // Correção Workspace State
   const [redacaoAtual, setRedacaoAtual] = useState(null);
   const [conteudoTexto, setConteudoTexto] = useState(null);
   const [redacaoVisualizar, setRedacaoVisualizar] = useState(null);
   const [hoveredPinViewId, setHoveredPinViewId] = useState(null);
 
-  // Filtros Globais
   const [filtroTexto, setFiltroTexto] = useState(""); 
   const [filtroTipo, setFiltroTipo] = useState("TODOS");
   const [somenteUrgentes, setSomenteUrgentes] = useState(false);
@@ -94,7 +129,15 @@ function PainelCorretor() {
   const [filtroHistData, setFiltroHistData] = useState(""); 
   const [filtroHistTipo, setFiltroHistTipo] = useState("TODOS");
 
-  // Filtros Respostas e Manuais
+  const [filtroDataRecibos, setFiltroDataRecibos] = useState('TUDO');
+  const [dtInicioRecibos, setDtInicioRecibos] = useState('');
+  const [dtFimRecibos, setDtFimRecibos] = useState('');
+
+  const [filtroDataExtrato, setFiltroDataExtrato] = useState('MES_ATUAL');
+  const [dtInicioExtrato, setDtInicioExtrato] = useState('');
+  const [dtFimExtrato, setDtFimExtrato] = useState('');
+  const [filtroStatusExtrato, setFiltroStatusExtrato] = useState('TODOS'); // NOVO FILTRO DE STATUS
+
   const [buscaResposta, setBuscaResposta] = useState("");
   const [filtroRespModelo, setFiltroRespModelo] = useState("TODOS");
   const [filtroRespContexto, setFiltroRespContexto] = useState("TODOS");
@@ -116,21 +159,22 @@ function PainelCorretor() {
   const [startPoint, setStartPoint] = useState(null);
   const [currentBox, setCurrentBox] = useState(null);
   const [editingPinId, setEditingPinId] = useState(null); 
-
   const [tempoRestanteStr, setTempoRestanteStr] = useState('');
   const [loadingIA, setLoadingIA] = useState(false);
 
-  // Modais
   const { isOpen, onOpen, onClose } = useDisclosure(); 
   const modalRespostas = useDisclosure(); 
   const modalCriarResposta = useDisclosure(); 
   const modalConfirmacao = useDisclosure();
   const modalLeitor = useDisclosure(); 
+  const modalProblema = useDisclosure();
   
+  const fileInputInlineRef = useRef(null);
+  const [arquivoInline, setArquivoInline] = useState(null);
+  const [enviandoRecibo, setEnviandoRecibo] = useState(false);
+
   const [materialSelecionado, setMaterialSelecionado] = useState(null); 
   const [confirmacaoConfig, setConfirmacaoConfig] = useState({ titulo: '', mensagem: '', acao: null, botaoCor: 'blue', textoBotao: 'Confirmar' });
-  
-  const modalProblema = useDisclosure();
   const [motivoProblema, setMotivoProblema] = useState('');
   const [obsProblema, setObsProblema] = useState('');
   const [enviandoProblema, setEnviandoProblema] = useState(false);
@@ -139,11 +183,8 @@ function PainelCorretor() {
   const [pinTipoErro, setPinTipoErro] = useState('');
   const [pinTexto, setPinTexto] = useState('');
   
-  // Respostas Rápidas State
   const [quickReplyContext, setQuickReplyContext] = useState('GERAL');
   const [quickReplyComp, setQuickReplyComp] = useState(1);
-  const [quickReplyTipoErro, setQuickReplyTipoErro] = useState(null);
-  
   const [novoTituloResp, setNovoTituloResp] = useState("");
   const [novoTextoResp, setNovoTextoResp] = useState("");
   const [novoModeloResp, setNovoModeloResp] = useState("ENEM");
@@ -165,11 +206,21 @@ function PainelCorretor() {
 
   useEffect(() => { verificarPermissao(); }, []);
 
+  // --- ATUALIZAÇÃO AUTOMÁTICA DA FILA E DA CARTEIRA ---
+  useEffect(() => {
+    let interval;
+    if (aba === 'fila' && !redacaoAtual) {
+        interval = setInterval(() => { carregarFila(); }, 10000); 
+    } else if (aba === 'carteira') {
+        interval = setInterval(() => { carregarCarteira(); }, 10000); 
+    }
+    return () => clearInterval(interval);
+  }, [aba, redacaoAtual]);
+
   useEffect(() => {
     if (!redacaoAtual) return;
     const endTime = localStorage.getItem('correcao_endtime');
     if (!endTime) return;
-
     const updateTimer = () => {
         const now = Date.now();
         const diff = parseInt(endTime) - now;
@@ -209,129 +260,157 @@ function PainelCorretor() {
   const carregarHistorico = async () => { try { const r = await axios.get('http://127.0.0.1:8000/api/corretor/historico/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setHistorico(r.data); } catch (e) { } };
   const carregarCarteira = async () => { try { const r = await axios.get('http://127.0.0.1:8000/api/corretor/carteira/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setCarteira(r.data); } catch (e) { } };
   const carregarRespostasRapidas = async () => { setIsLoadingRespostas(true); try { const r = await axios.get('http://127.0.0.1:8000/api/respostas-rapidas/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setTodasRespostas(r.data); } catch (e) { } setIsLoadingRespostas(false); };
-  const carregarMateriais = async () => { 
-      try { 
-          const r = await axios.get('http://127.0.0.1:8000/api/materiais/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
-          setMateriais(r.data.filter(m => m.categoria.startsWith('CORRETOR_'))); 
-      } catch (e) {} 
+  const carregarMateriais = async () => { try { const r = await axios.get('http://127.0.0.1:8000/api/materiais/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setMateriais(r.data.filter(m => m.categoria.startsWith('CORRETOR_'))); } catch (e) {} };
+
+  const solicitarSaque = async () => {
+      try {
+          const token = localStorage.getItem('token');
+          await axios.post('http://127.0.0.1:8000/api/corretor/solicitar-saque/', {}, { headers: { Authorization: `Bearer ${token}` } });
+          toast({ title: 'Saque solicitado!', description: 'Siga os próximos passos para receber o seu pagamento.', status: 'success' });
+          carregarCarteira(); 
+      } catch (e) { toast({ title: 'Erro', description: e.response?.data?.erro || "Erro ao solicitar", status: 'error' }); }
   };
 
-  const abrirMaterial = (m) => {
-      const temTexto = m.conteudo && m.conteudo.length > 5;
-      const temExtra = m.dados_extras && Object.keys(m.dados_extras).length > 0;
-      
-      if (temTexto || temExtra) {
-          setMaterialSelecionado(m);
-          modalLeitor.onOpen();
-      } else if (m.arquivo) {
-          window.open(m.arquivo, '_blank');
-      } else {
-          toast({ title: "Este material não possui conteúdo legível.", status: "info" });
+  const enviarReciboInline = async () => {
+      if (!arquivoInline) return toast({ title: 'Atenção', description: 'Selecione o arquivo PDF ou foto.', status: 'warning' });
+      setEnviandoRecibo(true);
+      try {
+          const token = localStorage.getItem('token');
+          const formData = new FormData();
+          formData.append('arquivo_recibo', arquivoInline);
+
+          await axios.post(`http://127.0.0.1:8000/api/corretor/pagamento/${carteira.solicitacao_ativa.id}/enviar-recibo/`, formData, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } });
+          
+          toast({ title: 'Enviado com sucesso!', description: 'A equipe financeira vai analisar.', status: 'success' });
+          setArquivoInline(null);
+          carregarCarteira();
+      } catch (e) { toast({ title: 'Erro no envio', status: 'error' }); }
+      setEnviandoRecibo(false);
+  };
+
+  const imprimirDocumentoOculto = (html) => {
+      setIsPreparingPrint(true);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0';
+      iframe.style.width = '0px'; iframe.style.height = '0px'; iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+      iframe.contentWindow.document.open(); iframe.contentWindow.document.write(html); iframe.contentWindow.document.close();
+      setTimeout(() => { setIsPreparingPrint(false); iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000); }, 1000); 
+  };
+
+  const handlePrintRecibo = (recibo) => {
+      const baseUrl = window.location.origin;
+      const dataAtual = new Date(recibo.data || recibo.data_solicitacao || new Date()).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+      const valorExtenso = valorPorExtenso(recibo.valor);
+      const valorFormatado = parseFloat(recibo.valor).toFixed(2).replace('.', ',');
+      const totalRedacoes = (recibo.qtd_normal || 0) + (recibo.qtd_vip || 0);
+
+      let dadosBancariosHtml = '';
+      if (usuario.chave_pix) dadosBancariosHtml += `<li><strong>Chave Pix:</strong> ${usuario.chave_pix} ${usuario.tipo_chave_pix ? `(${usuario.tipo_chave_pix})` : ''}</li>`;
+      if (usuario.banco || usuario.agencia_conta) {
+          const agencia = usuario.agencia_conta?.split('Cc:')[0]?.replace('Ag:', '').trim() || '';
+          const conta = usuario.agencia_conta?.split('Cc:')[1]?.trim() || '';
+          if (usuario.banco) dadosBancariosHtml += `<li><strong>Banco:</strong> ${usuario.banco}</li>`;
+          if (agencia) dadosBancariosHtml += `<li><strong>Agência:</strong> ${agencia}</li>`;
+          if (conta) dadosBancariosHtml += `<li><strong>Conta Corrente nº:</strong> ${conta}</li>`;
       }
+      if (!dadosBancariosHtml) dadosBancariosHtml = `<li><em>Nenhum dado para recebimento foi fornecido no cadastro do prestador.</em></li>`;
+
+      const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Recibo de Pagamento</title>
+          <style>
+              @page { size: A4 portrait; margin: 12mm 15mm; }
+              body { margin: 0; padding: 0; font-family: 'Times New Roman', serif; color: black; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid black; padding-bottom: 12px; margin-bottom: 30px; }
+              .logo-container img { max-height: 45px; object-fit: contain; }
+              .title-container { text-align: right; }
+              .title { font-size: 22px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+              .subtitle { font-size: 14px; color: #555; }
+              .content p { font-size: 15px; line-height: 1.8; text-align: justify; margin-bottom: 20px; }
+              .details { padding-left: 10px; margin-bottom: 20px; font-size: 15px; line-height: 1.8; background-color: #fcfcfc; border: 1px solid #eee; padding: 15px; border-radius: 5px; }
+              .signature-section { margin-top: 50px; text-align: center; width: 60%; margin-left: auto; margin-right: auto; }
+              .signature-line { border-top: 1px solid black; margin-bottom: 8px; }
+              .nota { margin-top: 40px; border: 1px dashed gray; padding: 15px; background-color: #f9f9f9; }
+              .nota h4 { margin-top: 0; font-size: 13px; margin-bottom: 8px; }
+              .nota p { font-size: 13px; margin-bottom: 10px; line-height: 1.5; text-align: justify; }
+              .nota ul { list-style-type: none; padding-left: 10px; margin: 0; }
+              .nota li { font-size: 13px; margin-bottom: 5px; }
+              .nota li::before { content: "•"; margin-right: 8px; font-weight: bold; }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              <div class="logo-container">
+                  <img src="${baseUrl}/logo-print.png" alt="Logo" onerror="this.style.display='none';" />
+              </div>
+              <div class="title-container">
+                  <div class="title">Recibo de Pagamento</div>
+                  <div class="subtitle">Guia do Texto Plataforma Educacional</div>
+              </div>
+          </div>
+
+          <div class="content">
+              <p>
+                  Declaro, para os devidos fins, que RECEBI da empresa <strong>Guia do Texto Plataforma Educacional</strong>,
+                  inscrita no CNPJ sob o nº <strong>[INSERIR O SEU CNPJ AQUI]</strong>, a quantia de <strong>R$ ${valorFormatado}
+                  (${valorExtenso})</strong>, referente aos serviços de correção de redações na plataforma.
+              </p>
+
+              <p style="font-weight: bold; margin-bottom: 10px;">Detalhe dos Serviços Prestados:</p>
+              <div class="details">
+                  <div style="margin-bottom: 8px;"><strong>Serviço realizado:</strong> Correção e análise pedagógica de <strong>${totalRedacoes}</strong> redação(ões) submetida(s) na plataforma.</div>
+                  <div style="margin-bottom: 4px;"><strong>Sendo:</strong></div>
+                  <div style="padding-left: 15px;">- <strong>${recibo.qtd_normal}</strong> Correções Normais</div>
+                  <div style="padding-left: 15px;">- <strong>${recibo.qtd_vip}</strong> Correções VIPs (Urgência)</div>
+              </div>
+
+              <p>
+                  Declaro, ainda, que os serviços prestados foram realizados de forma eventual e autônoma,
+                  sem habitualidade, pessoalidade ou subordinação, não caracterizando, portanto,
+                  vínculo empregatício de qualquer natureza.
+              </p>
+
+              <p>
+                  Com este pagamento, dou plena, geral e irrevogável quitação, nada mais tendo a exigir,
+                  a qualquer título, com relação ao serviço mencionado. E, por ser verdade, firmo o presente.
+              </p>
+
+              <div style="text-align: right; margin-top: 30px; margin-bottom: 40px; font-size: 15px;">
+                  Rio de Janeiro/RJ, ${dataAtual}.
+              </div>
+
+              <div class="signature-section">
+                  <div class="signature-line"></div>
+                  <div style="font-weight: bold; font-size: 15px;">${usuario.first_name} ${usuario.last_name}</div>
+                  <div style="font-size: 13px; color: #333;">CPF: ${usuario.cpf || 'Não informado'}</div>
+              </div>
+          </div>
+
+          <div class="nota">
+              <h4>NOTA DE RESPONSABILIDADE:</h4>
+              <p>Este recibo somente terá validade mediante a apresentação do comprovante de transferência bancária efetuada pela Guia do Texto. O repasse financeiro foi realizado estritamente para os dados bancários e/ou chave PIX validados pelo próprio prestador em seu cadastro na plataforma, isentando a contratante de responsabilidade por dados incorretos, conforme listado abaixo:</p>
+              <ul>
+                  ${dadosBancariosHtml}
+              </ul>
+          </div>
+      </body>
+      </html>
+      `;
+      imprimirDocumentoOculto(html);
   };
 
-  const pegarRedacao = async (id) => {
-    const token = localStorage.getItem('token');
-    const idSalvo = localStorage.getItem('redacao_em_andamento');
-    if (idSalvo && idSalvo !== id.toString()) {
-        try {
-            const checkRes = await axios.get(`http://127.0.0.1:8000/api/redacao/${idSalvo}/`, { headers: { Authorization: `Bearer ${token}` } });
-            if (checkRes.data.status === 'EM_CORRECAO' && checkRes.data.corretor_atual === usuario.id) {
-                abrirConfirmacao("Redação em Aberto", `Você já possui a redação #${idSalvo} aberta. Deseja retomar?`, () => carregarDadosRedacao(idSalvo, token), "teal", "Retomar"); return;
-            } else { localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); }
-        } catch (e) { localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); }
-    }
-    try {
-      const r = await axios.post(`http://127.0.0.1:8000/api/corrigir/${id}/iniciar/`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      const minutos = r.data.minutos_limite || 40; 
-      localStorage.setItem('correcao_endtime', Date.now() + (minutos * 60 * 1000)); localStorage.setItem('redacao_em_andamento', id);
-      carregarDadosRedacao(id, token);
-    } catch (error) { toast({ title: 'Atenção', description: error.response?.data?.erro || "Erro ao iniciar", status: 'warning' }); carregarFila(); }
-  };
-
-  const carregarDadosRedacao = async (id, token) => {
-    try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/redacao/${id}/`, { headers: { Authorization: `Bearer ${token}` } });
-        const redData = response.data;
-        if (redData.status !== 'EM_CORRECAO') {
-            toast({ title: "Indisponível", description: "Esta redação não está mais com você.", status: "warning" });
-            localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); return;
-        }
-        setRedacaoAtual(redData);
-        if (redData.texto && redData.texto.trim() !== '') { setConteudoTexto(redData.texto); } else if (redData.arquivo && redData.arquivo.endsWith('.txt')) { const textResponse = await axios.get(redData.arquivo); setConteudoTexto(textResponse.data); } else { setConteudoTexto(null); }
-        const isSimples = redData.tema_tipo?.toUpperCase() === 'SIMPLES' || redData.tipo?.toUpperCase() === 'SIMPLES';
-        setNotas(isSimples ? { 1: 0, 2: 0, 3: 0, 4: 0 } : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-        setComentarios(isSimples ? { 1: '', 2: '', 3: '', 4: '' } : { 1: '', 2: '', 3: '', 4: '', 5: '' });
-        setPins([]); localStorage.setItem('redacao_em_andamento', id);
-    } catch (e) { toast({ title: 'Erro ao baixar redação', status: 'error' }); }
-  };
-
-  const abrirFeedbackHistorico = async (id) => {
-      try {
-          const response = await axios.get(`http://127.0.0.1:8000/api/redacao/${id}/`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-          let dados = response.data;
-          if (dados.texto && dados.texto.trim() !== '') { dados.conteudoTexto = dados.texto; } else if (dados.arquivo && dados.arquivo.endsWith('.txt')) { const textRes = await axios.get(dados.arquivo); dados.conteudoTexto = textRes.data; }
-          setRedacaoVisualizar(dados);
-      } catch (e) {}
-  };
-
-  const gerarCorrecaoIA = async () => {
-      setLoadingIA(true);
-      try {
-          const res = await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/ia/`, { texto: conteudoTexto || '', tema: redacaoAtual.tema_titulo, tipo: redacaoAtual.tema_tipo || redacaoAtual.tipo || 'ENEM' }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-          setNotas(res.data.notas); setComentarios(res.data.comentarios);
-          toast({ title: 'Mágica feita! ✨', status: 'success' });
-      } catch(e) { toast({ title: 'Erro na IA', description: e.response?.data?.erro || "Erro", status: 'error' }); }
-      setLoadingIA(false);
-  };
-
-  const liberarRedacaoReal = async () => { 
-      try { 
-          await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/liberar/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
-          toast({ title: 'Redação devolvida.', status: 'info' }); 
-          localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); 
-      } catch (error) {} 
-  };
-  
-  const finalizarCorrecaoReal = async () => {
-    const payload = { redacao_id: redacaoAtual.id, nota_final: Object.values(notas).reduce((a,b)=>a+b,0), notas: notas, comentarios: comentarios, anotacoes: pins.map(p => ({ competencia: p.competencia, x: p.x, y: p.y, width: p.width, height: p.height, tipo_erro: p.tipo_erro || 'Geral', texto: p.texto || "" })) };
-    try { 
-        await axios.post('http://127.0.0.1:8000/api/corrigir/', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
-        toast({ title: 'Sucesso! 🚀', description: 'Dinheiro creditado.', status: 'success' }); 
-        localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); carregarHistorico(); carregarCarteira(); 
-    } catch (e) {}
-  };
-  
-  const reportarProblemaReal = async () => {
-      if (!motivoProblema) return toast({ title: 'Selecione um motivo!', status: 'warning' });
-      setEnviandoProblema(true);
-      try {
-          await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/problema/`, { motivo: motivoProblema, observacao: obsProblema }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-          toast({ title: 'Sinalizada com sucesso', description: 'A redação foi enviada para a coordenação auditar.', status: 'info' });
-          localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); modalProblema.onClose(); carregarFila();
-      } catch (e) { }
-      setEnviandoProblema(false);
-  };
-
-  const criarRespostaRapida = async (origin = 'MODAL_CRIACAO') => { 
-      const t = novoTituloResp;
-      const x = novoTextoResp;
-      const c = origin === 'MODAL_DURANTE_CORRECAO' ? quickReplyContext : novoContextoResp;
-      const comp = origin === 'MODAL_DURANTE_CORRECAO' ? quickReplyComp : novaCompResp;
-      const m = origin === 'MODAL_DURANTE_CORRECAO' ? (isSimplesMode ? 'SIMPLES' : 'ENEM') : novoModeloResp;
-
-      if (!t.trim() || !x.trim()) return toast({ title: 'Preencha tudo', status: 'warning' });
-      setIsCreatingResposta(true);
-      try { 
-          const payload = { modelo: m, competencia: comp, contexto: c, titulo: t, texto: x, tipo_erro: "" };
-          const r = await axios.post('http://127.0.0.1:8000/api/respostas-rapidas/', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
-          setTodasRespostas([...todasRespostas, r.data]); 
-          setNovoTituloResp(''); setNovoTextoResp(''); 
-          toast({ title: 'Salvo com sucesso!', status: 'success' }); 
-          if (origin === 'MODAL_CRIACAO') modalCriarResposta.onClose();
-      } catch (e) {} finally { setIsCreatingResposta(false); }
-  };
-  
+  const abrirMaterial = (m) => { const temTexto = m.conteudo && m.conteudo.length > 5; const temExtra = m.dados_extras && Object.keys(m.dados_extras).length > 0; if (temTexto || temExtra) { setMaterialSelecionado(m); modalLeitor.onOpen(); } else if (m.arquivo) { window.open(m.arquivo, '_blank'); } else { toast({ title: "Este material não possui conteúdo legível.", status: "info" }); } };
+  const pegarRedacao = async (id) => { const token = localStorage.getItem('token'); const idSalvo = localStorage.getItem('redacao_em_andamento'); if (idSalvo && idSalvo !== id.toString()) { try { const checkRes = await axios.get(`http://127.0.0.1:8000/api/redacao/${idSalvo}/`, { headers: { Authorization: `Bearer ${token}` } }); if (checkRes.data.status === 'EM_CORRECAO' && checkRes.data.corretor_atual === usuario.id) { abrirConfirmacao("Redação em Aberto", `Você já possui a redação #${idSalvo} aberta. Deseja retomar?`, () => carregarDadosRedacao(idSalvo, token), "teal", "Retomar"); return; } else { localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); } } catch (e) { localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); } } try { const r = await axios.post(`http://127.0.0.1:8000/api/corrigir/${id}/iniciar/`, {}, { headers: { Authorization: `Bearer ${token}` } }); const minutos = r.data.minutos_limite || 40; localStorage.setItem('correcao_endtime', Date.now() + (minutos * 60 * 1000)); localStorage.setItem('redacao_em_andamento', id); carregarDadosRedacao(id, token); } catch (error) { toast({ title: 'Atenção', description: error.response?.data?.erro || "Erro ao iniciar", status: 'warning' }); carregarFila(); } };
+  const carregarDadosRedacao = async (id, token) => { try { const response = await axios.get(`http://127.0.0.1:8000/api/redacao/${id}/`, { headers: { Authorization: `Bearer ${token}` } }); const redData = response.data; if (redData.status !== 'EM_CORRECAO') { toast({ title: "Indisponível", description: "Esta redação não está mais com você.", status: "warning" }); localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); return; } setRedacaoAtual(redData); if (redData.texto && redData.texto.trim() !== '') { setConteudoTexto(redData.texto); } else if (redData.arquivo && redData.arquivo.endsWith('.txt')) { const textResponse = await axios.get(redData.arquivo); setConteudoTexto(textResponse.data); } else { setConteudoTexto(null); } const isSimples = redData.tema_tipo?.toUpperCase() === 'SIMPLES' || redData.tipo?.toUpperCase() === 'SIMPLES'; setNotas(isSimples ? { 1: 0, 2: 0, 3: 0, 4: 0 } : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }); setComentarios(isSimples ? { 1: '', 2: '', 3: '', 4: '' } : { 1: '', 2: '', 3: '', 4: '', 5: '' }); setPins([]); localStorage.setItem('redacao_em_andamento', id); } catch (e) { toast({ title: 'Erro ao baixar redação', status: 'error' }); } };
+  const abrirFeedbackHistorico = async (id) => { try { const response = await axios.get(`http://127.0.0.1:8000/api/redacao/${id}/`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); let dados = response.data; if (dados.texto && dados.texto.trim() !== '') { dados.conteudoTexto = dados.texto; } else if (dados.arquivo && dados.arquivo.endsWith('.txt')) { const textRes = await axios.get(dados.arquivo); dados.conteudoTexto = textRes.data; } setRedacaoVisualizar(dados); } catch (e) {} };
+  const gerarCorrecaoIA = async () => { setLoadingIA(true); try { const res = await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/ia/`, { texto: conteudoTexto || '', tema: redacaoAtual.tema_titulo, tipo: redacaoAtual.tema_tipo || redacaoAtual.tipo || 'ENEM' }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setNotas(res.data.notas); setComentarios(res.data.comentarios); toast({ title: 'Mágica feita! ✨', status: 'success' }); } catch(e) { toast({ title: 'Erro na IA', description: e.response?.data?.erro || "Erro", status: 'error' }); } setLoadingIA(false); };
+  const liberarRedacaoReal = async () => { try { await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/liberar/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); toast({ title: 'Redação devolvida.', status: 'info' }); localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); } catch (error) {} };
+  const finalizarCorrecaoReal = async () => { const payload = { redacao_id: redacaoAtual.id, nota_final: Object.values(notas).reduce((a,b)=>a+b,0), notas: notas, comentarios: comentarios, anotacoes: pins.map(p => ({ competencia: p.competencia, x: p.x, y: p.y, width: p.width, height: p.height, tipo_erro: p.tipo_erro || 'Geral', texto: p.texto || "" })) }; try { await axios.post('http://127.0.0.1:8000/api/corrigir/', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); toast({ title: 'Sucesso! 🚀', description: 'Dinheiro creditado.', status: 'success' }); localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); carregarHistorico(); carregarCarteira(); } catch (e) { toast({ title: 'Erro', description: e.response?.data?.erro || "Erro no servidor", status: 'error' }); } };
+  const reportarProblemaReal = async () => { if (!motivoProblema) return toast({ title: 'Selecione um motivo!', status: 'warning' }); setEnviandoProblema(true); try { await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/problema/`, { motivo: motivoProblema, observacao: obsProblema }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); toast({ title: 'Sinalizada com sucesso', description: 'A redação foi enviada para a coordenação auditar.', status: 'info' }); localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); modalProblema.onClose(); carregarFila(); } catch (e) { } setEnviandoProblema(false); };
+  const criarRespostaRapida = async (origin = 'MODAL_CRIACAO') => { const t = novoTituloResp; const x = novoTextoResp; const c = origin === 'MODAL_DURANTE_CORRECAO' ? quickReplyContext : novoContextoResp; const comp = origin === 'MODAL_DURANTE_CORRECAO' ? quickReplyComp : novaCompResp; const m = origin === 'MODAL_DURANTE_CORRECAO' ? (isSimplesMode ? 'SIMPLES' : 'ENEM') : novoModeloResp; if (!t.trim() || !x.trim()) return toast({ title: 'Preencha tudo', status: 'warning' }); setIsCreatingResposta(true); try { const payload = { modelo: m, competencia: comp, contexto: c, titulo: t, texto: x, tipo_erro: "" }; const r = await axios.post('http://127.0.0.1:8000/api/respostas-rapidas/', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setTodasRespostas([...todasRespostas, r.data]); setNovoTituloResp(''); setNovoTextoResp(''); toast({ title: 'Salvo com sucesso!', status: 'success' }); if (origin === 'MODAL_CRIACAO') modalCriarResposta.onClose(); } catch (e) {} finally { setIsCreatingResposta(false); } };
   const excluirRespostaRapida = async (id, e) => { if(e) e.stopPropagation(); try { await axios.delete(`http://127.0.0.1:8000/api/respostas-rapidas/${id}/`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setTodasRespostas(todasRespostas.filter(r => r.id !== id)); } catch (e) { } };
   
   const getSLA = (dataEnvio) => { const diff = Math.abs(new Date() - new Date(dataEnvio)) / 36e5; if (diff < 24) return { cor: 'green', texto: 'Novo', badge: 'green' }; if (diff < 72) return { cor: 'orange', texto: 'Atenção', badge: 'orange' }; return { cor: 'red', texto: 'Atrasado', badge: 'red' }; };
@@ -343,9 +422,46 @@ function PainelCorretor() {
   const handleEditPin = (pin) => { setEditingPinId(pin.id); setPinCompetencia(pin.competencia); setPinTipoErro(pin.tipo_erro || ''); setPinTexto(pin.texto || ''); setCurrentBox(null); onOpen(); };
   const salvarPin = () => { if (pinCompetencia === 1 && !pinTipoErro) return toast({ title: 'Selecione o erro', status: 'warning' }); const novoPin = editingPinId ? { ...pins.find(p => p.id === editingPinId), competencia: parseInt(pinCompetencia), tipo_erro: pinTipoErro, texto: pinTexto } : { id: Date.now(), ...currentBox, competencia: parseInt(pinCompetencia), tipo_erro: pinTipoErro, texto: pinTexto }; setPins(editingPinId ? pins.map(p => p.id === editingPinId ? novoPin : p) : [...pins, novoPin]); setEditingPinId(null); setCurrentBox(null); onClose(); };
 
+  const renderFiltroData = (filtro, setFiltro, dtInicio, setDtInicio, dtFim, setDtFim) => (
+      <Flex gap={3} wrap="wrap" mb={4} p={4} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.100" align="center">
+          <Icon as={TimeIcon} color="gray.500" />
+          <Select w="200px" size="sm" bg="white" value={filtro} onChange={e => setFiltro(e.target.value)}>
+              <option value="TUDO">Todo o Histórico</option>
+              <option value="MES_ATUAL">Mês Atual</option>
+              <option value="MES_ANTERIOR">Mês Anterior</option>
+              <option value="PERIODO">Período Específico</option>
+          </Select>
+          {filtro === 'PERIODO' && (
+              <HStack>
+                  <Input type="date" bg="white" size="sm" value={dtInicio} onChange={e => setDtInicio(e.target.value)} />
+                  <Text fontSize="sm" color="gray.500">até</Text>
+                  <Input type="date" bg="white" size="sm" value={dtFim} onChange={e => setDtFim(e.target.value)} />
+              </HStack>
+          )}
+      </Flex>
+  );
+
+  const aplicarFiltroData = (itemData, filtro, inicio, fim) => {
+    if (!itemData) return false;
+    const dataItem = new Date(itemData);
+    const hoje = new Date();
+    if (filtro === 'MES_ATUAL') { return dataItem.getMonth() === hoje.getMonth() && dataItem.getFullYear() === hoje.getFullYear(); }
+    if (filtro === 'MES_ANTERIOR') {
+        const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+        return dataItem.getMonth() === mesAnterior.getMonth() && dataItem.getFullYear() === mesAnterior.getFullYear();
+    }
+    if (filtro === 'PERIODO') {
+        if (!inicio && !fim) return true;
+        const dInicio = inicio ? new Date(inicio) : new Date('2000-01-01');
+        const dFim = fim ? new Date(fim) : new Date('2100-01-01');
+        dFim.setHours(23, 59, 59, 999);
+        return dataItem >= dInicio && dataItem <= dFim;
+    }
+    return true; 
+  };
+
   const renderConteudo = () => {
       
-      // 1. ESPAÇO DE TRABALHO (CORREÇÃO)
       if (redacaoAtual) {
           const isAcabando = tempoRestanteStr && parseInt(tempoRestanteStr.split(':')[0]) < 5;
           return (
@@ -430,7 +546,6 @@ function PainelCorretor() {
           );
       }
 
-      // 2. TELA DE FEEDBACK HISTÓRICO
       if (redacaoVisualizar) {
           const isSimples = redacaoVisualizar.tema_tipo?.toUpperCase() === 'SIMPLES' || redacaoVisualizar.tipo?.toUpperCase() === 'SIMPLES';
           return (
@@ -472,7 +587,6 @@ function PainelCorretor() {
           );
       }
 
-      // 3. ABA FILA DE CORREÇÃO
       if (aba === 'fila') {
           let listaFiltrada = fila.filter(r => {
               const match = r.tema_titulo.toLowerCase().includes(filtroTexto.toLowerCase()) || (r.id && r.id.toString().includes(filtroTexto.toLowerCase()));
@@ -537,7 +651,6 @@ function PainelCorretor() {
           );
       }
 
-      // 4. ABA HISTÓRICO
       if (aba === 'historico') {
           let historicoFiltrado = historico.filter(h => {
               const match = h.tema_titulo.toLowerCase().includes(filtroHistTexto.toLowerCase()) || (h.id && h.id.toString().includes(filtroHistTexto.toLowerCase()));
@@ -587,37 +700,276 @@ function PainelCorretor() {
           );
       }
 
-      // 5. ABA CARTEIRA FINANCEIRA
       if (aba === 'carteira') {
+          const recibosFiltrados = carteira.historico_pagamentos?.filter(p => aplicarFiltroData(p.data_pagamento || p.data_solicitacao, filtroDataRecibos, dtInicioRecibos, dtFimRecibos)) || [];
+          
+          const extratoFiltrado = carteira.transacoes?.filter(t => {
+              const matchData = aplicarFiltroData(t.data, filtroDataExtrato, dtInicioExtrato, dtFimExtrato);
+              const matchStatus = filtroStatusExtrato === 'TODOS' ? true : (filtroStatusExtrato === 'PAGO' ? t.foi_pago : !t.foi_pago);
+              return matchData && matchStatus;
+          }) || [];
+
+          const steps = [
+              { title: 'Solicitado', description: 'Garantia de Saldo' },
+              { title: 'Envio do Recibo', description: 'Assinatura (RPA)' },
+              { title: 'Em Análise', description: 'Equipe Financeira' },
+              { title: 'Pagamento Realizado', description: 'PIX/Transferência' },
+          ];
+
+          let activeStep = 0;
+          if (carteira.solicitacao_ativa) {
+              if (carteira.solicitacao_ativa.status === 'AGUARDANDO_RECIBO' || carteira.solicitacao_ativa.status === 'RECUSADO') activeStep = 1;
+              else if (carteira.solicitacao_ativa.status === 'EM_ANALISE') activeStep = 2;
+          }
+
           return (
               <Container maxW="container.xl" py={8}>
                   <Heading size="lg" color="teal.600" mb={6}>Minha Carteira</Heading>
-                  <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={8}>
-                      <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="green.400"><Box p={5}><Stat><StatLabel color="gray.500" fontSize="md" fontWeight="bold">Saldo Disponível (A Receber)</StatLabel><StatNumber fontSize="4xl" color="green.500" mt={2}>R$ {parseFloat(carteira.saldo_atual || 0).toFixed(2).replace('.', ',')}</StatNumber></Stat></Box></Card>
-                  </SimpleGrid>
-                  <Card bg="white" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="gray.100">
-                      <Box p={4} borderBottom="1px solid" borderColor="gray.100" bg="gray.50"><Heading size="sm" color="gray.700">Histórico de Transações</Heading></Box>
-                      <Box overflowX="auto">
-                          <Table variant="simple"><Thead bg="white"><Tr><Th w="20%">Data / Hora</Th><Th w="50%">Descrição da Operação</Th><Th w="15%" textAlign="center">Tipo</Th><Th w="15%" textAlign="right">Valor (R$)</Th></Tr></Thead>
-                              <Tbody>
-                                  {carteira.transacoes.map(t => (
-                                      <Tr key={t.id} _hover={{ bg: 'gray.50' }}>
-                                          <Td fontSize="sm" color="gray.600">{new Date(t.data).toLocaleString('pt-BR')}</Td>
-                                          <Td fontWeight="medium" color="gray.800">{t.descricao}</Td>
-                                          <Td textAlign="center"><Badge colorScheme={t.tipo === 'CREDITO' ? 'green' : 'red'} variant="subtle" px={2} borderRadius="md">{t.tipo}</Badge></Td>
-                                          <Td textAlign="right" fontWeight="bold" color={t.tipo === 'CREDITO' ? 'green.500' : 'red.500'}>{t.tipo === 'CREDITO' ? '+' : '-'} {parseFloat(t.valor).toFixed(2).replace('.', ',')}</Td>
-                                      </Tr>
-                                  ))}
-                                  {(!carteira.transacoes || carteira.transacoes.length === 0) && (<Tr><Td colSpan={4} textAlign="center" py={8} color="gray.500">Sua carteira ainda não possui transações.</Td></Tr>)}
-                              </Tbody>
-                          </Table>
-                      </Box>
-                  </Card>
+                  
+                  {carteira.solicitacao_ativa ? (
+                      <Card bg="white" shadow="md" borderRadius="xl" border="1px solid" borderColor="gray.200" mb={8} overflow="hidden">
+                          <Box bg="gray.50" p={6} borderBottom="1px solid" borderColor="gray.200">
+                              <Stepper size="lg" colorScheme="teal" index={activeStep}>
+                                {steps.map((step, index) => (
+                                  <Step key={index}>
+                                    <StepIndicator>
+                                      <StepStatus complete={<StepIcon />} incomplete={<StepNumber />} active={<StepNumber />} />
+                                    </StepIndicator>
+                                    <Box flexShrink='0' display={{ base: 'none', md: 'block' }}>
+                                      <StepTitle>{step.title}</StepTitle>
+                                      <StepDescription>{step.description}</StepDescription>
+                                    </Box>
+                                    <StepSeparator />
+                                  </Step>
+                                ))}
+                              </Stepper>
+                          </Box>
+
+                          <CardBody p={8}>
+                              {carteira.solicitacao_ativa.status === 'AGUARDANDO_RECIBO' && (
+                                  <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} alignItems="center">
+                                      <Box>
+                                          <Heading size="md" color="teal.700" mb={3}>Estamos quase lá!</Heading>
+                                          <Text color="gray.600" mb={4} lineHeight="tall">
+                                              Para cumprirmos as exigências legais e liberarmos o seu pagamento de <strong>R$ {parseFloat(carteira.solicitacao_ativa.valor).toFixed(2).replace('.', ',')}</strong>, precisamos do seu <strong>Recibo de Pagamento a Autônomo (RPA)</strong> assinado.
+                                          </Text>
+                                          <Button size="lg" colorScheme="teal" leftIcon={<DownloadIcon />} onClick={() => handlePrintRecibo(carteira.solicitacao_ativa)} shadow="md">
+                                              1. Imprimir Recibo Oficial
+                                          </Button>
+                                      </Box>
+                                      
+                                      <Box 
+                                          w="full" h="200px" border="2px dashed" borderColor={arquivoInline ? "green.400" : "teal.300"} 
+                                          borderRadius="xl" display="flex" flexDirection="column" alignItems="center" justifyContent="center" 
+                                          bg={arquivoInline ? "green.50" : "teal.50"} cursor="pointer" onClick={() => fileInputInlineRef.current.click()} 
+                                          transition="all 0.2s" _hover={{ bg: arquivoInline ? 'green.100' : 'teal.100' }} p={4}
+                                      >
+                                          <Icon as={arquivoInline ? CheckCircleIcon : AttachmentIcon} boxSize={10} color={arquivoInline ? "green.500" : "teal.500"} mb={3} />
+                                          <Text fontSize="md" color={arquivoInline ? "green.800" : "teal.800"} fontWeight="bold" textAlign="center">
+                                              {arquivoInline ? arquivoInline.name : "2. Anexe aqui o recibo assinado"}
+                                          </Text>
+                                          {!arquivoInline && <Text fontSize="sm" color="teal.600" mt={1}>Clique para selecionar (PDF ou Foto)</Text>}
+                                          {arquivoInline && (
+                                              <Button mt={4} size="sm" colorScheme="green" onClick={(e) => { e.stopPropagation(); enviarReciboInline(); }} isLoading={enviandoRecibo} shadow="md">
+                                                  Confirmar e Enviar
+                                              </Button>
+                                          )}
+                                      </Box>
+                                      <Input type="file" display="none" ref={fileInputInlineRef} onChange={e => setArquivoInline(e.target.files[0])} accept="image/*,.pdf" />
+                                  </SimpleGrid>
+                              )}
+
+                              {carteira.solicitacao_ativa.status === 'RECUSADO' && (
+                                  <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} alignItems="center">
+                                      <Box>
+                                          <Alert status="error" borderRadius="md" mb={4} flexDirection="column" alignItems="start" p={5}>
+                                              <HStack mb={2}><AlertIcon /><Heading size="sm">Ops! Problema no recibo.</Heading></HStack>
+                                              <Text fontSize="sm">A equipe financeira encontrou o seguinte problema:</Text>
+                                              <Text fontWeight="bold" mt={2} bg="white" p={3} borderRadius="md" w="full">"{carteira.solicitacao_ativa.motivo_recusa}"</Text>
+                                          </Alert>
+                                          <Button size="md" colorScheme="gray" leftIcon={<DownloadIcon />} onClick={() => handlePrintRecibo(carteira.solicitacao_ativa)}>
+                                              Imprimir Novamente
+                                          </Button>
+                                      </Box>
+                                      
+                                      <Box 
+                                          w="full" h="200px" border="2px dashed" borderColor={arquivoInline ? "green.400" : "red.300"} 
+                                          borderRadius="xl" display="flex" flexDirection="column" alignItems="center" justifyContent="center" 
+                                          bg={arquivoInline ? "green.50" : "red.50"} cursor="pointer" onClick={() => fileInputInlineRef.current.click()} 
+                                          transition="all 0.2s" _hover={{ bg: arquivoInline ? 'green.100' : 'red.100' }} p={4}
+                                      >
+                                          <Icon as={arquivoInline ? CheckCircleIcon : AttachmentIcon} boxSize={10} color={arquivoInline ? "green.500" : "red.500"} mb={3} />
+                                          <Text fontSize="md" color={arquivoInline ? "green.800" : "red.800"} fontWeight="bold" textAlign="center">
+                                              {arquivoInline ? arquivoInline.name : "Anexe o novo recibo corrigido"}
+                                          </Text>
+                                          {arquivoInline && (
+                                              <Button mt={4} size="sm" colorScheme="green" onClick={(e) => { e.stopPropagation(); enviarReciboInline(); }} isLoading={enviandoRecibo} shadow="md">
+                                                  Confirmar e Reenviar
+                                              </Button>
+                                          )}
+                                      </Box>
+                                      <Input type="file" display="none" ref={fileInputInlineRef} onChange={e => setArquivoInline(e.target.files[0])} accept="image/*,.pdf" />
+                                  </SimpleGrid>
+                              )}
+
+                              {carteira.solicitacao_ativa.status === 'EM_ANALISE' && (
+                                  <Flex direction="column" align="center" justify="center" py={4}>
+                                      <TimeIcon boxSize={12} color="blue.400" mb={4} animation="pulse 2s infinite" />
+                                      <Heading size="md" color="blue.700" mb={2}>Documentação em Análise</Heading>
+                                      <Text color="gray.500" textAlign="center" maxW="lg">
+                                          Recebemos o seu documento perfeitamente. A nossa equipe financeira está a validá-lo e o seu PIX/Transferência será processado em breve.
+                                      </Text>
+                                      <style>{`@keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }`}</style>
+                                  </Flex>
+                              )}
+                          </CardBody>
+                      </Card>
+                  ) : (
+                      <SimpleGrid columns={{ base: 1, lg: 3 }} spacing={6} mb={8}>
+                          <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="green.400">
+                              <CardBody display="flex" flexDirection="column" justifyContent="center">
+                                  <Stat>
+                                      <StatLabel color="gray.500" fontSize="md" fontWeight="bold">Saldo Disponível (A Receber)</StatLabel>
+                                      <StatNumber fontSize="3xl" color="green.500" mt={2}>
+                                          R$ {parseFloat(carteira.saldo_atual || 0).toFixed(2).replace('.', ',')}
+                                      </StatNumber>
+                                  </Stat>
+                              </CardBody>
+                          </Card>
+
+                          <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="blue.400">
+                              <CardBody display="flex" flexDirection="column" justifyContent="center" alignItems="center">
+                                  <Text color="gray.500" fontSize="md" fontWeight="bold" mb={3}>Redações Corrigidas</Text>
+                                  <HStack justify="center" spacing={4} w="full">
+                                      <Badge colorScheme="blue" px={3} py={1} borderRadius="md" fontSize="sm">{carteira.qtd_normal_pendente || 0} Normais</Badge>
+                                      <Badge colorScheme="purple" px={3} py={1} borderRadius="md" fontSize="sm">{carteira.qtd_vip_pendente || 0} VIPs</Badge>
+                                      <Badge colorScheme="green" px={3} py={1} borderRadius="md" fontSize="sm">Total: {(carteira.qtd_normal_pendente || 0) + (carteira.qtd_vip_pendente || 0)}</Badge>
+                                  </HStack>
+                              </CardBody>
+                          </Card>
+
+                          <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="teal.400">
+                              <CardBody display="flex" flexDirection="column" justifyContent="center">
+                                  <Button
+                                      w="full" h="full" minH="70px" size="lg" colorScheme="teal"
+                                      onClick={solicitarSaque} isDisabled={carteira.saldo_atual <= 0}
+                                      leftIcon={<MdAttachMoney size="24px" />} whiteSpace="normal"
+                                      fontSize="xl" shadow="md" _hover={{ transform: 'translateY(-2px)', shadow: 'lg' }}
+                                  >
+                                      Solicitar Saque
+                                  </Button>
+                              </CardBody>
+                          </Card>
+                      </SimpleGrid>
+                  )}
+
+                  <Tabs colorScheme="teal" isLazy>
+                      <TabList mb={4}>
+                          <Tab fontWeight="bold" fontSize="md"><Icon as={AttachmentIcon} mr={2} /> Extrato Detalhado</Tab>
+                          <Tab fontWeight="bold" fontSize="md"><Icon as={MdAccountBalanceWallet} mr={2} /> Meus Recibos (Histórico)</Tab>
+                      </TabList>
+
+                      <TabPanels>
+                          <TabPanel p={0}>
+                              <Flex gap={3} wrap="wrap" mb={4} p={4} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.200" align="center" shadow="sm" justify="space-between">
+                                  <HStack flexWrap="wrap" gap={3}>
+                                      <Icon as={TimeIcon} color="gray.500" />
+                                      <Select w="200px" size="sm" bg="gray.50" value={filtroDataExtrato} onChange={e => setFiltroDataExtrato(e.target.value)}>
+                                          <option value="TUDO">Todo o Histórico</option>
+                                          <option value="MES_ATUAL">Mês Atual</option>
+                                          <option value="MES_ANTERIOR">Mês Anterior</option>
+                                          <option value="PERIODO">Período Específico</option>
+                                      </Select>
+                                      {filtroDataExtrato === 'PERIODO' && (
+                                          <HStack>
+                                              <Input type="date" bg="gray.50" size="sm" value={dtInicioExtrato} onChange={e => setDtInicioExtrato(e.target.value)} />
+                                              <Text fontSize="sm" color="gray.500">até</Text>
+                                              <Input type="date" bg="gray.50" size="sm" value={dtFimExtrato} onChange={e => setDtFimExtrato(e.target.value)} />
+                                          </HStack>
+                                      )}
+                                      <Divider orientation="vertical" h="30px" display={{ base: 'none', md: 'block' }} mx={2} />
+                                      <Select w="200px" size="sm" bg="gray.50" value={filtroStatusExtrato} onChange={e => setFiltroStatusExtrato(e.target.value)}>
+                                          <option value="TODOS">Todos os Status</option>
+                                          <option value="PAGO">Somente Pagos</option>
+                                          <option value="A RECEBER">Somente a Receber</option>
+                                      </Select>
+                                  </HStack>
+                                  <Badge colorScheme="purple" px={3} py={1} borderRadius="full" fontSize="sm">
+                                      {extratoFiltrado.length} {extratoFiltrado.length === 1 ? 'Registo' : 'Registos'}
+                                  </Badge>
+                              </Flex>
+
+                              <Card bg="white" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="gray.100">
+                                  <Box overflowX="auto">
+                                      <Table variant="simple" size="sm">
+                                          <Thead bg="gray.50"><Tr><Th w="20%">Data / Hora</Th><Th w="40%">Descrição da Operação</Th><Th w="15%" textAlign="center">Status</Th><Th w="10%" textAlign="center">Tipo</Th><Th w="15%" textAlign="right">Valor (R$)</Th></Tr></Thead>
+                                          <Tbody>
+                                              {extratoFiltrado.map(t => (
+                                                  <Tr key={t.id} _hover={{ bg: 'gray.50' }}>
+                                                      <Td fontSize="sm" color="gray.600">{new Date(t.data).toLocaleString('pt-BR')}</Td>
+                                                      <Td fontWeight="medium" color="gray.800">{t.descricao}</Td>
+                                                      <Td textAlign="center">
+                                                          <Badge colorScheme={t.foi_pago ? 'green' : 'yellow'} variant={t.foi_pago ? 'subtle' : 'solid'}>
+                                                              {t.foi_pago ? 'PAGO' : 'A RECEBER'}
+                                                          </Badge>
+                                                      </Td>
+                                                      <Td textAlign="center"><Badge colorScheme={t.tipo === 'CREDITO' ? 'green' : 'red'} variant="outline" px={2} borderRadius="md">{t.tipo}</Badge></Td>
+                                                      <Td textAlign="right" fontWeight="bold" color={t.tipo === 'CREDITO' ? 'green.500' : 'red.500'}>{t.tipo === 'CREDITO' ? '+' : '-'} {parseFloat(t.valor).toFixed(2).replace('.', ',')}</Td>
+                                                  </Tr>
+                                              ))}
+                                              {extratoFiltrado.length === 0 && (<Tr><Td colSpan={5} textAlign="center" py={8} color="gray.500">Sua carteira ainda não possui transações neste período.</Td></Tr>)}
+                                          </Tbody>
+                                      </Table>
+                                  </Box>
+                              </Card>
+                          </TabPanel>
+
+                          <TabPanel p={0}>
+                              {renderFiltroData(filtroDataRecibos, setFiltroDataRecibos, dtInicioRecibos, setDtInicioRecibos, dtFimRecibos, setDtFimRecibos)}
+                              <Card bg="white" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="gray.100" mb={8}>
+                                  <Box overflowX="auto">
+                                      <Table variant="simple">
+                                          <Thead bg="gray.50">
+                                              <Tr>
+                                                  <Th w="20%">Data do Pagamento</Th>
+                                                  <Th w="40%" textAlign="center">Redações Pagas</Th>
+                                                  <Th w="20%" isNumeric>Valor Recebido</Th>
+                                                  <Th w="20%" textAlign="center">Recibo Oficial</Th>
+                                              </Tr>
+                                          </Thead>
+                                          <Tbody>
+                                              {recibosFiltrados.filter(p => p.status === 'PAGO').map(p => (
+                                                  <Tr key={p.id} _hover={{ bg: 'gray.50' }}>
+                                                      <Td fontWeight="bold" color="gray.600">{new Date(p.data_pagamento || p.data_solicitacao).toLocaleDateString('pt-BR')}</Td>
+                                                      <Td textAlign="center">
+                                                          <Badge colorScheme="blue" mr={1}>{p.qtd_normal} Normais</Badge>
+                                                          <Badge colorScheme="purple">{p.qtd_vip} VIPs</Badge>
+                                                      </Td>
+                                                      <Td isNumeric fontWeight="bold" color="green.500">R$ {parseFloat(p.valor).toFixed(2).replace('.', ',')}</Td>
+                                                      <Td textAlign="center">
+                                                          <Button size="sm" colorScheme="teal" variant="outline" leftIcon={<DownloadIcon />} onClick={() => {
+                                                              if(p.arquivo_recibo_url) window.open(`http://127.0.0.1:8000${p.arquivo_recibo_url}`, '_blank');
+                                                              else handlePrintRecibo(p);
+                                                          }}>
+                                                              Ver Arquivo
+                                                          </Button>
+                                                      </Td>
+                                                  </Tr>
+                                              ))}
+                                              {recibosFiltrados.filter(p => p.status === 'PAGO').length === 0 && (
+                                                  <Tr><Td colSpan={4} textAlign="center" py={8} color="gray.500">Nenhum pagamento finalizado neste período.</Td></Tr>
+                                              )}
+                                          </Tbody>
+                                      </Table>
+                                  </Box>
+                              </Card>
+                          </TabPanel>
+                      </TabPanels>
+                  </Tabs>
               </Container>
           );
       }
 
-      // 6. ABA RESPOSTAS RÁPIDAS (NOVO LAYOUT)
       if (aba === 'respostas') {
           const respostasFiltradas = todasRespostas.filter(r => {
               const matchBusca = r.titulo.toLowerCase().includes(buscaResposta.toLowerCase()) || r.texto.toLowerCase().includes(buscaResposta.toLowerCase());
@@ -675,7 +1027,6 @@ function PainelCorretor() {
           );
       }
 
-      // 7. ABA MANUAL DO CORRETOR (Notice Board + Biblioteca com LEITOR)
       if (aba === 'manuais') {
           const comunicados = materiais.filter(m => m.categoria === 'CORRETOR_COMUNICADO');
           const documentacao = materiais.filter(m => m.categoria !== 'CORRETOR_COMUNICADO');
@@ -783,195 +1134,51 @@ function PainelCorretor() {
     <Box w="full" h="100%">
         {renderConteudo()}
 
-        {/* ======================================================= */}
-        {/* LEITOR DE MATERIAIS NATIVO E DINÂMICO                     */}
-        {/* ======================================================= */}
+        <Modal isOpen={isPreparingPrint} isCentered closeOnOverlayClick={false}>
+            <ModalOverlay backdropFilter="blur(5px)" bg="blackAlpha.600" />
+            <ModalContent bg="transparent" boxShadow="none" textAlign="center" color="white">
+                <VStack spacing={6}>
+                    <Spinner thickness='5px' speed='0.65s' emptyColor='gray.200' color='teal.400' size='xl' />
+                    <Box><Heading size="md" mb={2}>Gerando Recibo Oficial</Heading><Text color="gray.200">Preparando documento para impressão...</Text></Box>
+                </VStack>
+            </ModalContent>
+        </Modal>
+
         <Modal isOpen={modalLeitor.isOpen} onClose={modalLeitor.onClose} size="3xl" scrollBehavior="inside" isCentered>
             <ModalOverlay backdropFilter="blur(4px)" bg="blackAlpha.700" />
             <ModalContent borderRadius="xl" overflow="hidden">
                 <ModalHeader borderBottom="1px solid" borderColor="gray.100" bg="gray.50">
-                    <HStack mb={2}>
-                        <Badge colorScheme={materialSelecionado?.categoria?.startsWith('CORRETOR_') ? 'purple' : 'teal'}>
-                            {INFOS_MANUAL[materialSelecionado?.categoria]?.nome || 'Leitura Nátiva'}
-                        </Badge>
-                    </HStack>
+                    <HStack mb={2}><Badge colorScheme={materialSelecionado?.categoria?.startsWith('CORRETOR_') ? 'purple' : 'teal'}>{INFOS_MANUAL[materialSelecionado?.categoria]?.nome || 'Leitura Nátiva'}</Badge></HStack>
                     <Heading size="md" color="gray.800" lineHeight="short">{materialSelecionado?.titulo}</Heading>
                 </ModalHeader>
                 <ModalCloseButton mt={2} />
                 <ModalBody py={6} bg="white">
                     <VStack align="stretch" spacing={6}>
-                        {materialSelecionado?.descricao && (
-                            <Text fontSize="md" color="gray.600" fontStyle="italic" borderLeft="3px solid" borderColor="gray.300" pl={3}>
-                                {materialSelecionado.descricao}
-                            </Text>
-                        )}
-
-                        {/* RENDERIZAÇÃO DO JSON DINÂMICO (Régua, Repertório, Desvios) */}
+                        {materialSelecionado?.descricao && (<Text fontSize="md" color="gray.600" fontStyle="italic" borderLeft="3px solid" borderColor="gray.300" pl={3}>{materialSelecionado.descricao}</Text>)}
                         {materialSelecionado?.dados_extras && Object.keys(materialSelecionado.dados_extras).length > 0 && (
                             <Box>
-                                {/* FORMATO: RÉGUA DE PENALIZAÇÕES */}
                                 {materialSelecionado.categoria === 'CORRETOR_REGUA' && materialSelecionado.dados_extras.regras && (
-                                    <Box bg="red.50" p={4} borderRadius="xl" border="1px solid" borderColor="red.100">
-                                        <Heading size="sm" color="red.800" mb={4} display="flex" alignItems="center" gap={2}><WarningTwoIcon /> Tabela de Penalizações</Heading>
-                                        <Box overflowX="auto" borderRadius="md" border="1px solid" borderColor="red.200">
-                                            <Table size="sm" variant="simple" bg="white">
-                                                <Thead bg="red.100"><Tr><Th w="15%">Comp.</Th><Th>Gatilho (Ação do Aluno)</Th><Th w="25%">Penalidade</Th></Tr></Thead>
-                                                <Tbody>
-                                                    {materialSelecionado.dados_extras.regras.map((r, i) => (
-                                                        <Tr key={i}><Td fontWeight="900" color="red.600">{r.comp}</Td><Td color="gray.700">{r.gatilho}</Td><Td fontWeight="bold" color="red.600">{r.desconto}</Td></Tr>
-                                                    ))}
-                                                </Tbody>
-                                            </Table>
-                                        </Box>
-                                    </Box>
+                                    <Box bg="red.50" p={4} borderRadius="xl" border="1px solid" borderColor="red.100"><Heading size="sm" color="red.800" mb={4} display="flex" alignItems="center" gap={2}><WarningTwoIcon /> Tabela de Penalizações</Heading><Box overflowX="auto" borderRadius="md" border="1px solid" borderColor="red.200"><Table size="sm" variant="simple" bg="white"><Thead bg="red.100"><Tr><Th w="15%">Comp.</Th><Th>Gatilho (Ação do Aluno)</Th><Th w="25%">Penalidade</Th></Tr></Thead><Tbody>{materialSelecionado.dados_extras.regras.map((r, i) => (<Tr key={i}><Td fontWeight="900" color="red.600">{r.comp}</Td><Td color="gray.700">{r.gatilho}</Td><Td fontWeight="bold" color="red.600">{r.desconto}</Td></Tr>))}</Tbody></Table></Box></Box>
                                 )}
-
-                                {/* FORMATO: REPERTÓRIOS */}
                                 {(materialSelecionado.categoria === 'CORRETOR_REPERTORIO' || materialSelecionado.categoria === 'ALUNO_REPERTORIO') && (
-                                    <Box bg="purple.50" p={5} borderRadius="xl" border="1px solid" borderColor="purple.100">
-                                        <Heading size="sm" color="purple.800" mb={4} display="flex" alignItems="center" gap={2}><CheckCircleIcon /> Estrutura do Repertório</Heading>
-                                        <SimpleGrid columns={2} spacing={4} mb={4}>
-                                            <Box bg="white" p={3} borderRadius="md" border="1px solid" borderColor="purple.200"><Text fontSize="2xs" fontWeight="900" color="purple.500" textTransform="uppercase">Eixo Temático</Text><Text fontWeight="bold" color="purple.900">{materialSelecionado.dados_extras.eixo || '-'}</Text></Box>
-                                            <Box bg="white" p={3} borderRadius="md" border="1px solid" borderColor="purple.200"><Text fontSize="2xs" fontWeight="900" color="purple.500" textTransform="uppercase">Tipo de Repertório</Text><Text fontWeight="bold" color="purple.900">{materialSelecionado.dados_extras.tipo || '-'}</Text></Box>
-                                        </SimpleGrid>
-                                        <Box bg="white" p={4} borderRadius="md" border="1px solid" borderColor="purple.200"><Text fontSize="2xs" fontWeight="900" color="purple.500" textTransform="uppercase" mb={2}>Aplicação na Redação</Text><Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap" lineHeight="tall">{materialSelecionado.dados_extras.aplicacao || '-'}</Text></Box>
-                                    </Box>
+                                    <Box bg="purple.50" p={5} borderRadius="xl" border="1px solid" borderColor="purple.100"><Heading size="sm" color="purple.800" mb={4} display="flex" alignItems="center" gap={2}><CheckCircleIcon /> Estrutura do Repertório</Heading><SimpleGrid columns={2} spacing={4} mb={4}><Box bg="white" p={3} borderRadius="md" border="1px solid" borderColor="purple.200"><Text fontSize="2xs" fontWeight="900" color="purple.500" textTransform="uppercase">Eixo Temático</Text><Text fontWeight="bold" color="purple.900">{materialSelecionado.dados_extras.eixo || '-'}</Text></Box><Box bg="white" p={3} borderRadius="md" border="1px solid" borderColor="purple.200"><Text fontSize="2xs" fontWeight="900" color="purple.500" textTransform="uppercase">Tipo de Repertório</Text><Text fontWeight="bold" color="purple.900">{materialSelecionado.dados_extras.tipo || '-'}</Text></Box></SimpleGrid><Box bg="white" p={4} borderRadius="md" border="1px solid" borderColor="purple.200"><Text fontSize="2xs" fontWeight="900" color="purple.500" textTransform="uppercase" mb={2}>Aplicação na Redação</Text><Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap" lineHeight="tall">{materialSelecionado.dados_extras.aplicacao || '-'}</Text></Box></Box>
                                 )}
-
-                                {/* FORMATO: DESVIOS */}
                                 {materialSelecionado.categoria === 'CORRETOR_DESVIOS' && (
-                                    <Box bg="orange.50" p={5} borderRadius="xl" border="1px solid" borderColor="orange.100">
-                                        <Heading size="sm" color="orange.800" mb={4} display="flex" alignItems="center" gap={2}><EditIcon /> Dicionário de Desvios</Heading>
-                                        <SimpleGrid columns={2} spacing={4}>
-                                            <Box bg="white" p={4} borderRadius="md" border="1px solid" borderColor="red.200" borderLeft="4px solid" borderLeftColor="red.500"><Text fontSize="2xs" fontWeight="900" color="red.500" textTransform="uppercase" mb={2}>Como o aluno erra</Text><Text fontWeight="bold" color="gray.700">"{materialSelecionado.dados_extras.ex_errado}"</Text></Box>
-                                            <Box bg="white" p={4} borderRadius="md" border="1px solid" borderColor="green.200" borderLeft="4px solid" borderLeftColor="green.500"><Text fontSize="2xs" fontWeight="900" color="green.500" textTransform="uppercase" mb={2}>Como deveria ser</Text><Text fontWeight="bold" color="gray.700">"{materialSelecionado.dados_extras.ex_correto}"</Text></Box>
-                                        </SimpleGrid>
-                                    </Box>
+                                    <Box bg="orange.50" p={5} borderRadius="xl" border="1px solid" borderColor="orange.100"><Heading size="sm" color="orange.800" mb={4} display="flex" alignItems="center" gap={2}><EditIcon /> Dicionário de Desvios</Heading><SimpleGrid columns={2} spacing={4}><Box bg="white" p={4} borderRadius="md" border="1px solid" borderColor="red.200" borderLeft="4px solid" borderLeftColor="red.500"><Text fontSize="2xs" fontWeight="900" color="red.500" textTransform="uppercase" mb={2}>Como o aluno erra</Text><Text fontWeight="bold" color="gray.700">"{materialSelecionado.dados_extras.ex_errado}"</Text></Box><Box bg="white" p={4} borderRadius="md" border="1px solid" borderColor="green.200" borderLeft="4px solid" borderLeftColor="green.500"><Text fontSize="2xs" fontWeight="900" color="green.500" textTransform="uppercase" mb={2}>Como deveria ser</Text><Text fontWeight="bold" color="gray.700">"{materialSelecionado.dados_extras.ex_correto}"</Text></Box></SimpleGrid></Box>
                                 )}
                             </Box>
                         )}
-
-                        {/* RENDERIZAÇÃO DO TEXTO CORRIDO */}
-                        {materialSelecionado?.conteudo && (
-                            <Box bg="gray.50" p={5} borderRadius="xl" border="1px solid" borderColor="gray.200">
-                                <Text whiteSpace="pre-wrap" fontSize="15px" lineHeight="1.8" color="gray.700">
-                                    {materialSelecionado.conteudo}
-                                </Text>
-                            </Box>
-                        )}
+                        {materialSelecionado?.conteudo && (<Box bg="gray.50" p={5} borderRadius="xl" border="1px solid" borderColor="gray.200"><Text whiteSpace="pre-wrap" fontSize="15px" lineHeight="1.8" color="gray.700">{materialSelecionado.conteudo}</Text></Box>)}
                     </VStack>
                 </ModalBody>
-                <ModalFooter bg="gray.100" borderTop="1px solid" borderColor="gray.200" justifyContent="space-between">
-                    {materialSelecionado?.arquivo ? (
-                        <Button as="a" href={materialSelecionado.arquivo} target="_blank" colorScheme="blue" variant="outline" leftIcon={<DownloadIcon />}>
-                            Baixar PDF Anexo
-                        </Button>
-                    ) : <Box />}
-                    <Button colorScheme="gray" bg="white" border="1px solid" borderColor="gray.300" onClick={modalLeitor.onClose}>Fechar</Button>
-                </ModalFooter>
+                <ModalFooter bg="gray.100" borderTop="1px solid" borderColor="gray.200" justifyContent="space-between">{materialSelecionado?.arquivo ? (<Button as="a" href={materialSelecionado.arquivo} target="_blank" colorScheme="blue" variant="outline" leftIcon={<DownloadIcon />}>Baixar PDF Anexo</Button>) : <Box />}<Button colorScheme="gray" bg="white" border="1px solid" borderColor="gray.300" onClick={modalLeitor.onClose}>Fechar</Button></ModalFooter>
             </ModalContent>
         </Modal>
 
-
-        {/* MODAL: CRIAR NOVA RESPOSTA RÁPIDA */}
-        <Modal isOpen={modalCriarResposta.isOpen} onClose={modalCriarResposta.onClose} isCentered size="lg">
-            <ModalOverlay backdropFilter="blur(3px)" />
-            <ModalContent borderRadius="xl">
-                <ModalHeader borderBottom="1px solid" borderColor="gray.100">Criar Resposta Rápida</ModalHeader>
-                <ModalCloseButton />
-                <ModalBody py={6}>
-                    <VStack spacing={4} align="stretch">
-                        <SimpleGrid columns={2} spacing={4}>
-                            <FormControl><FormLabel fontSize="xs" fontWeight="bold">Modelo de Redação</FormLabel><Select size="sm" value={novoModeloResp} onChange={e => setNovoModeloResp(e.target.value)}><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option></Select></FormControl>
-                            <FormControl><FormLabel fontSize="xs" fontWeight="bold">Competência</FormLabel><Select size="sm" value={novaCompResp} onChange={e => setNovaCompResp(parseInt(e.target.value))}>{(novoModeloResp === 'ENEM' ? COMPETENCIAS_ENEM : COMPETENCIAS_SIMPLES).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></FormControl>
-                        </SimpleGrid>
-                        <FormControl><FormLabel fontSize="xs" fontWeight="bold">Onde este texto será usado?</FormLabel><Select size="sm" value={novoContextoResp} onChange={e => setNovoContextoResp(e.target.value)}><option value="GERAL">No Comentário Final da Competência</option><option value="PIN">Em um Apontamento Específico (Pin na Imagem)</option></Select></FormControl>
-                        <FormControl isRequired><FormLabel fontSize="xs" fontWeight="bold">Título (Atalho)</FormLabel><Input size="sm" placeholder="Ex: Fuga Parcial ao Tema" value={novoTituloResp} onChange={e => setNovoTituloResp(e.target.value)} /></FormControl>
-                        <FormControl isRequired><FormLabel fontSize="xs" fontWeight="bold">Texto Completo</FormLabel><Textarea size="sm" rows={4} placeholder="Escreva o texto detalhado que será colado na correção..." value={novoTextoResp} onChange={e => setNovoTextoResp(e.target.value)} /></FormControl>
-                    </VStack>
-                </ModalBody>
-                <ModalFooter bg="gray.50" borderTopRadius="none" borderBottomRadius="xl">
-                    <Button variant="ghost" mr={3} onClick={modalCriarResposta.onClose}>Cancelar</Button>
-                    <Button colorScheme="teal" onClick={() => criarRespostaRapida('MODAL_CRIACAO')} isLoading={isCreatingResposta} leftIcon={<AddIcon />}>Salvar Resposta</Button>
-                </ModalFooter>
-            </ModalContent>
-        </Modal>
-
-        {/* MODAL: SINALIZAR PROBLEMA (ATUALIZADO COM NOVOS MOTIVOS E ALERTAS) */}
-        <Modal isOpen={modalProblema.isOpen} onClose={modalProblema.onClose} isCentered size="md">
-            <ModalOverlay backdropFilter="blur(4px)" />
-            <ModalContent borderRadius="xl">
-                <ModalHeader color="orange.600" display="flex" alignItems="center" gap={2}>
-                    <WarningTwoIcon /> Sinalizar Problema
-                </ModalHeader>
-                <ModalCloseButton />
-                <ModalBody>
-                    <VStack spacing={4} align="stretch">
-                        <Alert status="warning" borderRadius="md" fontSize="sm" alignItems="flex-start">
-                            <AlertIcon mt={1} />
-                            <Box>
-                                <Text fontWeight="bold">Atenção!</Text>
-                                <Text>Ao sinalizar, esta redação sairá da sua mesa e será enviada para a auditoria da coordenação. Se o problema for confirmado, a redação será anulada.</Text>
-                            </Box>
-                        </Alert>
-                        
-                        <FormControl isRequired>
-                            <FormLabel fontWeight="bold" fontSize="sm">Motivo da Anulação</FormLabel>
-                            <Select bg="gray.50" value={motivoProblema} onChange={e => setMotivoProblema(e.target.value)} placeholder="Selecione o motivo exato...">
-                                <option value="TEXTO_ILEGIVEL">Texto Ilegível</option>
-                                <option value="FUGA_TEMA">Fuga Total ao Tema</option>
-                                <option value="FUGA_GENERO">Fuga Total ao Gênero</option>
-                                <option value="PLAGIO">Suspeita de Plágio</option>
-                                <option value="COPIA">Cópia (Textos Motivadores)</option>
-                                <option value="DESENHO">Desenho</option>
-                                <option value="IMPROPERIO">Impropério</option>
-                                <option value="DESENHO">Desenho</option>
-                                <option value="OUTROS">Outros motivos</option>
-                            </Select>
-                        </FormControl>
-                        
-                        <FormControl>
-                            <FormLabel fontWeight="bold" fontSize="sm">Detalhes / Observação para a Coordenação</FormLabel>
-                            <Textarea 
-                                bg="gray.50" 
-                                value={obsProblema} 
-                                onChange={e => setObsProblema(e.target.value)} 
-                                rows={3} 
-                                placeholder="Descreva o que encontrou para ajudar a coordenação na análise (Ex: Texto copiado da internet no 2º parágrafo)..." 
-                            />
-                        </FormControl>
-                    </VStack>
-                </ModalBody>
-                <ModalFooter bg="gray.50" borderTopRadius="none" borderBottomRadius="xl">
-                    <Button variant="ghost" mr={3} onClick={modalProblema.onClose}>Cancelar</Button>
-                    <Button colorScheme="orange" onClick={reportarProblemaReal} isLoading={enviandoProblema}>Enviar para Auditoria</Button>
-                </ModalFooter>
-            </ModalContent>
-        </Modal>
-
-        {/* MODAL: NOVO PIN (No modo edição de redação) */}
-        <Modal isOpen={isOpen} onClose={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }} size="sm" isCentered>
-            <ModalOverlay /><ModalContent borderRadius="xl"><ModalHeader fontSize="md">{editingPinId ? 'Editar Apontamento' : 'Novo Apontamento'}</ModalHeader> <ModalCloseButton />
-            <ModalBody><VStack spacing={3}><Box w="full"><Text fontSize="xs" fontWeight="bold" color="gray.500">COMPETÊNCIA</Text><Select size="sm" value={pinCompetencia} onChange={(e) => setPinCompetencia(parseInt(e.target.value))}>{compsAtuais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Box>{pinCompetencia === 1 && (<Box w="full"><Text fontSize="xs" fontWeight="bold" color="gray.500">TIPO DE ERRO</Text><Select size="sm" placeholder="Selecione..." value={pinTipoErro} onChange={(e) => setPinTipoErro(e.target.value)}>{ERROS_GRAMATICA.map(erro => <option key={erro.value} value={erro.value}>{erro.label}</option>)}</Select></Box>)}<Box w="full"><Flex justify="space-between" align="center" mb={1}><Text fontSize="xs" fontWeight="bold" color="gray.500">OBSERVAÇÃO</Text><Button size="xs" leftIcon={<Text fontSize="xs">⚡</Text>} onClick={() => { setQuickReplyComp(pinCompetencia); setQuickReplyContext('PIN'); modalRespostas.onOpen(); }} colorScheme="yellow" variant="ghost" h="20px">Rápidas</Button></Flex><Textarea size="sm" value={pinTexto} onChange={(e) => setPinTexto(e.target.value)} /></Box></VStack></ModalBody><ModalFooter><Button size="sm" variant="ghost" mr={3} onClick={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }}>Cancelar</Button><Button size="sm" colorScheme="blue" onClick={salvarPin}>Salvar</Button></ModalFooter></ModalContent>
-        </Modal>
-
-        {/* MODAL: USAR RESPOSTA RÁPIDA (Durante a correção) */}
-        <Modal isOpen={modalRespostas.isOpen} onClose={modalRespostas.onClose} isCentered size="lg">
-            <ModalOverlay /><ModalContent borderRadius="xl"><ModalHeader fontSize="md" borderBottom="1px solid #eee">⚡ Usar Resposta: <Text as="span" color="teal.600">{compsAtuais.find(c => c.id === quickReplyComp)?.nome}</Text></ModalHeader> <ModalCloseButton />
-            <ModalBody py={6}>
-                {isLoadingRespostas ? <Spinner size="sm" /> : (
-                    <Flex wrap="wrap" gap={3} mb={6}>
-                        {todasRespostas.filter(r => r.competencia === quickReplyComp && r.contexto === quickReplyContext && r.modelo === (isSimplesMode ? 'SIMPLES' : 'ENEM')).length === 0 && <Text fontSize="xs" color="gray.400">Nenhuma resposta salva para esta competência.</Text>}
-                        {todasRespostas.filter(r => r.competencia === quickReplyComp && r.contexto === quickReplyContext && r.modelo === (isSimplesMode ? 'SIMPLES' : 'ENEM')).map((resp) => (
-                            <Tooltip key={resp.id} label={resp.texto} hasArrow><Badge p={2} px={3} borderRadius="full" cursor="pointer" colorScheme="blue" variant="subtle" _hover={{ bg: 'blue.100', transform: 'scale(1.05)' }} onClick={() => { if (quickReplyContext === 'GERAL') setComentarios(prev => ({ ...prev, [quickReplyComp]: prev[quickReplyComp] ? prev[quickReplyComp] + '\n' + resp.texto : resp.texto })); else setPinTexto(prev => prev ? prev + '\n' + resp.texto : resp.texto); modalRespostas.onClose(); }}>{resp.titulo}</Badge></Tooltip>
-                        ))}
-                    </Flex>
-                )}
-                <Divider mb={4} /> <Text fontSize="sm" fontWeight="bold" mb={3}>Criar Nova Aqui</Text> 
-                <VStack spacing={3}><Input placeholder="Título curto" size="sm" value={novoTituloResp} onChange={(e) => setNovoTituloResp(e.target.value)} /><Textarea placeholder="Texto completo..." size="sm" rows={3} value={novoTextoResp} onChange={(e) => setNovoTextoResp(e.target.value)} /><Button leftIcon={<AddIcon />} size="sm" colorScheme="green" width="full" onClick={() => criarRespostaRapida('MODAL_DURANTE_CORRECAO')} isLoading={isCreatingResposta}>Salvar Atalho</Button></VStack>
-            </ModalBody></ModalContent>
-        </Modal>
-
+        <Modal isOpen={modalCriarResposta.isOpen} onClose={modalCriarResposta.onClose} isCentered size="lg"><ModalOverlay backdropFilter="blur(3px)" /><ModalContent borderRadius="xl"><ModalHeader borderBottom="1px solid" borderColor="gray.100">Criar Resposta Rápida</ModalHeader><ModalCloseButton /><ModalBody py={6}><VStack spacing={4} align="stretch"><SimpleGrid columns={2} spacing={4}><FormControl><FormLabel fontSize="xs" fontWeight="bold">Modelo de Redação</FormLabel><Select size="sm" value={novoModeloResp} onChange={e => setNovoModeloResp(e.target.value)}><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option></Select></FormControl><FormControl><FormLabel fontSize="xs" fontWeight="bold">Competência</FormLabel><Select size="sm" value={novaCompResp} onChange={e => setNovaCompResp(parseInt(e.target.value))}>{(novoModeloResp === 'ENEM' ? COMPETENCIAS_ENEM : COMPETENCIAS_SIMPLES).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></FormControl></SimpleGrid><FormControl><FormLabel fontSize="xs" fontWeight="bold">Onde este texto será usado?</FormLabel><Select size="sm" value={novoContextoResp} onChange={e => setNovoContextoResp(e.target.value)}><option value="GERAL">No Comentário Final da Competência</option><option value="PIN">Em um Apontamento Específico (Pin na Imagem)</option></Select></FormControl><FormControl isRequired><FormLabel fontSize="xs" fontWeight="bold">Título (Atalho)</FormLabel><Input size="sm" placeholder="Ex: Fuga Parcial ao Tema" value={novoTituloResp} onChange={e => setNovoTituloResp(e.target.value)} /></FormControl><FormControl isRequired><FormLabel fontSize="xs" fontWeight="bold">Texto Completo</FormLabel><Textarea size="sm" rows={4} placeholder="Escreva o texto detalhado que será colado na correção..." value={novoTextoResp} onChange={e => setNovoTextoResp(e.target.value)} /></FormControl></VStack></ModalBody><ModalFooter bg="gray.50" borderTopRadius="none" borderBottomRadius="xl"><Button variant="ghost" mr={3} onClick={modalCriarResposta.onClose}>Cancelar</Button><Button colorScheme="teal" onClick={() => criarRespostaRapida('MODAL_CRIACAO')} isLoading={isCreatingResposta} leftIcon={<AddIcon />}>Salvar Resposta</Button></ModalFooter></ModalContent></Modal>
+        <Modal isOpen={modalProblema.isOpen} onClose={modalProblema.onClose} isCentered size="md"><ModalOverlay backdropFilter="blur(4px)" /><ModalContent borderRadius="xl"><ModalHeader color="orange.600" display="flex" alignItems="center" gap={2}><WarningTwoIcon /> Sinalizar Problema</ModalHeader><ModalCloseButton /><ModalBody><VStack spacing={4} align="stretch"><Alert status="warning" borderRadius="md" fontSize="sm" alignItems="flex-start"><AlertIcon mt={1} /><Box><Text fontWeight="bold">Atenção!</Text><Text>Ao sinalizar, esta redação sairá da sua mesa e será enviada para a auditoria da coordenação. Se o problema for confirmado, a redação será anulada.</Text></Box></Alert><FormControl isRequired><FormLabel fontWeight="bold" fontSize="sm">Motivo da Anulação</FormLabel><Select bg="gray.50" value={motivoProblema} onChange={e => setMotivoProblema(e.target.value)} placeholder="Selecione o motivo exato..."><option value="TEXTO_ILEGIVEL">Texto Ilegível</option><option value="FUGA_TEMA">Fuga Total ao Tema</option><option value="FUGA_GENERO">Fuga Total ao Gênero</option><option value="PLAGIO">Suspeita de Plágio</option><option value="COPIA">Cópia (Textos Motivadores)</option><option value="DESENHO">Desenho</option><option value="IMPROPERIO">Impropério</option><option value="OUTROS">Outros motivos</option></Select></FormControl><FormControl><FormLabel fontWeight="bold" fontSize="sm">Detalhes / Observação</FormLabel><Textarea bg="gray.50" value={obsProblema} onChange={e => setObsProblema(e.target.value)} rows={3} placeholder="Descreva o que encontrou para ajudar a coordenação na análise..." /></FormControl></VStack></ModalBody><ModalFooter bg="gray.50" borderTopRadius="none" borderBottomRadius="xl"><Button variant="ghost" mr={3} onClick={modalProblema.onClose}>Cancelar</Button><Button colorScheme="orange" onClick={reportarProblemaReal} isLoading={enviandoProblema}>Enviar para Auditoria</Button></ModalFooter></ModalContent></Modal>
+        <Modal isOpen={isOpen} onClose={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }} size="sm" isCentered><ModalOverlay /><ModalContent borderRadius="xl"><ModalHeader fontSize="md">{editingPinId ? 'Editar Apontamento' : 'Novo Apontamento'}</ModalHeader> <ModalCloseButton /><ModalBody><VStack spacing={3}><Box w="full"><Text fontSize="xs" fontWeight="bold" color="gray.500">COMPETÊNCIA</Text><Select size="sm" value={pinCompetencia} onChange={(e) => setPinCompetencia(parseInt(e.target.value))}>{compsAtuais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Box>{pinCompetencia === 1 && (<Box w="full"><Text fontSize="xs" fontWeight="bold" color="gray.500">TIPO DE ERRO</Text><Select size="sm" placeholder="Selecione..." value={pinTipoErro} onChange={(e) => setPinTipoErro(e.target.value)}>{ERROS_GRAMATICA.map(erro => <option key={erro.value} value={erro.value}>{erro.label}</option>)}</Select></Box>)}<Box w="full"><Flex justify="space-between" align="center" mb={1}><Text fontSize="xs" fontWeight="bold" color="gray.500">OBSERVAÇÃO</Text><Button size="xs" leftIcon={<Text fontSize="xs">⚡</Text>} onClick={() => { setQuickReplyComp(pinCompetencia); setQuickReplyContext('PIN'); modalRespostas.onOpen(); }} colorScheme="yellow" variant="ghost" h="20px">Rápidas</Button></Flex><Textarea size="sm" value={pinTexto} onChange={(e) => setPinTexto(e.target.value)} /></Box></VStack></ModalBody><ModalFooter><Button size="sm" variant="ghost" mr={3} onClick={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }}>Cancelar</Button><Button size="sm" colorScheme="blue" onClick={salvarPin}>Salvar</Button></ModalFooter></ModalContent></Modal>
+        <Modal isOpen={modalRespostas.isOpen} onClose={modalRespostas.onClose} isCentered size="lg"><ModalOverlay /><ModalContent borderRadius="xl"><ModalHeader fontSize="md" borderBottom="1px solid #eee">⚡ Usar Resposta: <Text as="span" color="teal.600">{compsAtuais.find(c => c.id === quickReplyComp)?.nome}</Text></ModalHeader> <ModalCloseButton /><ModalBody py={6}>{isLoadingRespostas ? <Spinner size="sm" /> : (<Flex wrap="wrap" gap={3} mb={6}>{todasRespostas.filter(r => r.competencia === quickReplyComp && r.contexto === quickReplyContext && r.modelo === (isSimplesMode ? 'SIMPLES' : 'ENEM')).length === 0 && <Text fontSize="xs" color="gray.400">Nenhuma resposta salva para esta competência.</Text>}{todasRespostas.filter(r => r.competencia === quickReplyComp && r.contexto === quickReplyContext && r.modelo === (isSimplesMode ? 'SIMPLES' : 'ENEM')).map((resp) => (<Tooltip key={resp.id} label={resp.texto} hasArrow><Badge p={2} px={3} borderRadius="full" cursor="pointer" colorScheme="blue" variant="subtle" _hover={{ bg: 'blue.100', transform: 'scale(1.05)' }} onClick={() => { if (quickReplyContext === 'GERAL') setComentarios(prev => ({ ...prev, [quickReplyComp]: prev[quickReplyComp] ? prev[quickReplyComp] + '\n' + resp.texto : resp.texto })); else setPinTexto(prev => prev ? prev + '\n' + resp.texto : resp.texto); modalRespostas.onClose(); }}>{resp.titulo}</Badge></Tooltip>))}</Flex>)}<Divider mb={4} /> <Text fontSize="sm" fontWeight="bold" mb={3}>Criar Nova Aqui</Text><VStack spacing={3}><Input placeholder="Título curto" size="sm" value={novoTituloResp} onChange={(e) => setNovoTituloResp(e.target.value)} /><Textarea placeholder="Texto completo..." size="sm" rows={3} value={novoTextoResp} onChange={(e) => setNovoTextoResp(e.target.value)} /><Button leftIcon={<AddIcon />} size="sm" colorScheme="green" width="full" onClick={() => criarRespostaRapida('MODAL_DURANTE_CORRECAO')} isLoading={isCreatingResposta}>Salvar Atalho</Button></VStack></ModalBody></ModalContent></Modal>
         <Modal isOpen={modalConfirmacao.isOpen} onClose={modalConfirmacao.onClose} isCentered size="sm"><ModalOverlay backdropFilter="blur(2px)" /><ModalContent borderRadius="xl"><ModalHeader>{confirmacaoConfig.titulo}</ModalHeader><ModalCloseButton /><ModalBody><VStack spacing={4} align="center" py={2}><WarningTwoIcon w={10} h={10} color={`${confirmacaoConfig.botaoCor}.400`} /><Text textAlign="center" color="gray.600">{confirmacaoConfig.mensagem}</Text></VStack></ModalBody><ModalFooter><Button variant="ghost" mr={3} onClick={modalConfirmacao.onClose}>Cancelar</Button><Button colorScheme={confirmacaoConfig.botaoCor} onClick={() => { if(confirmacaoConfig.acao) confirmacaoConfig.acao(); modalConfirmacao.onClose(); }}>{confirmacaoConfig.textoBotao}</Button></ModalFooter></ModalContent></Modal>
 
     </Box>

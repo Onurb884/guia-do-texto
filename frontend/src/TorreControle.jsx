@@ -9,7 +9,7 @@ import {
   Switch, Divider, Tabs, TabList, TabPanels, Tab, TabPanel,
   Alert, AlertIcon, Textarea, Image
 } from '@chakra-ui/react';
-import { SearchIcon, WarningIcon, UnlockIcon, WarningTwoIcon, StarIcon, ViewIcon } from '@chakra-ui/icons';
+import { SearchIcon, WarningIcon, UnlockIcon, WarningTwoIcon, StarIcon, ViewIcon, ArrowBackIcon } from '@chakra-ui/icons';
 
 function TorreControle() {
   const [redacoes, setRedacoes] = useState([]);
@@ -20,11 +20,9 @@ function TorreControle() {
   
   const [tabIndex, setTabIndex] = useState(0);
 
-  // Modais de Ação
   const modalAlerta = useDisclosure();
   const [idParaLiberar, setIdParaLiberar] = useState(null);
 
-  const modalAuditoria = useDisclosure();
   const [redacaoAuditando, setRedacaoAuditoria] = useState(null);
   const [mensagemAluno, setMensagemAluno] = useState('');
   const [loadingAudit, setLoadingAudit] = useState(false);
@@ -46,14 +44,12 @@ function TorreControle() {
     setLoading(false);
   };
 
-  // --- FUNÇÕES DA AUDITORIA ---
   const abrirJulgamento = async (id) => {
     try {
         const token = localStorage.getItem('token');
         const res = await axios.get(`http://127.0.0.1:8000/api/redacao/${id}/`, { headers: { Authorization: `Bearer ${token}` } });
         setRedacaoAuditoria(res.data);
-        setMensagemAluno('Olá! A sua redação foi anulada pois não conseguimos ler o texto da imagem. Por favor, reenvie uma foto mais nítida. O seu crédito já foi devolvido!');
-        modalAuditoria.onOpen();
+        setMensagemAluno('');
     } catch (e) { toast({ title: 'Erro ao carregar', status: 'error' }); }
   };
 
@@ -71,13 +67,12 @@ function TorreControle() {
           }, { headers: { Authorization: `Bearer ${token}` } });
 
           toast({ title: 'Resolvido!', description: acao === 'VOLTAR_FILA' ? 'A redação voltou para os corretores.' : 'A redação foi anulada e o crédito devolvido.', status: 'success' });
-          modalAuditoria.onClose();
+          setRedacaoAuditoria(null); 
           carregarDados(); 
       } catch (e) { toast({ title: 'Erro ao resolver', status: 'error' }); }
       setLoadingAudit(false);
   };
 
-  // --- OUTRAS FUNÇÕES ---
   const confirmarLiberacao = (id) => { setIdParaLiberar(id); modalAlerta.onOpen(); };
   
   const forcarLiberacaoReal = async () => {
@@ -98,7 +93,6 @@ function TorreControle() {
     } catch (e) {}
   };
 
-  // Separação das Listas (Fila Normal vs Auditoria)
   const listaFilaNormal = redacoes.filter(r => r.status !== 'AUDITORIA');
   const listaAuditoria = redacoes.filter(r => r.status === 'AUDITORIA');
 
@@ -109,6 +103,111 @@ function TorreControle() {
       return matchTexto && matchStatus;
   });
 
+  // =========================================================================
+  // RENDERIZAÇÃO DO WORKSPACE DE AUDITORIA
+  // =========================================================================
+  if (redacaoAuditando) {
+      return (
+          <Flex h="100vh" overflow="hidden" w="full" bg="gray.100">
+              
+              {/* LADO ESQUERDO: A REDAÇÃO OFICIAL DO ALUNO */}
+              <Box flex="1" display="flex" flexDirection="column" bg="gray.200">
+                  
+                  {/* CABEÇALHO FIXO ALINHADO */}
+                  <Flex w="full" h="90px" px={8} bg="white" shadow="sm" justify="space-between" align="center" borderBottom="1px solid" borderColor="gray.300" zIndex={10}>
+                      <Button leftIcon={<ArrowBackIcon />} onClick={() => setRedacaoAuditoria(null)} colorScheme="gray" variant="solid" shadow="sm">
+                          Voltar para a Torre
+                      </Button>
+                      <Badge colorScheme="orange" fontSize="md" px={4} py={2} borderRadius="md" shadow="sm" display="flex" alignItems="center" gap={2}>
+                          <WarningTwoIcon /> Julgamento de Auditoria
+                      </Badge>
+                  </Flex>
+
+                  {/* ÁREA DE SCROLL DA REDAÇÃO */}
+                  <Box flex="1" overflowY="auto" p={8} display="flex" flexDirection="column" alignItems="center">
+                      <Box position="relative" display="inline-block" height="fit-content" boxShadow="2xl" bg="white" border="1px solid #ccc" borderRadius="sm" w={redacaoAuditando.texto ? "700px" : "full"} maxW={redacaoAuditando.texto ? "700px" : "900px"} flexShrink={redacaoAuditando.texto ? 0 : 1}>
+                          {redacaoAuditando.texto ? (
+                              <Box 
+                                  p="8px 30px" whiteSpace="pre-wrap" fontFamily="Arial, sans-serif" 
+                                  fontSize="16px" lineHeight="40px" color="gray.800" minHeight="1216px" 
+                                  bgImage="linear-gradient(transparent 39px, #ccc 40px)" bgSize="100% 40px"
+                              >
+                                  {redacaoAuditando.texto}
+                              </Box>
+                          ) : (
+                              <Image src={redacaoAuditando.arquivo} alt="Redação do Aluno" display="block" w="100%" h="auto" />
+                          )}
+                      </Box>
+                  </Box>
+              </Box>
+
+              {/* LADO DIREITO: PAINEL DE DECISÃO */}
+              <Box w="400px" bg="white" borderLeft="1px solid" borderColor="gray.300" display="flex" flexDirection="column" shadow="xl" zIndex={10}>
+                  
+                  {/* CABEÇALHO FIXO ALINHADO */}
+                  <Flex h="90px" px={6} direction="column" justify="center" borderBottom="1px solid" borderColor="orange.200" bg="orange.50">
+                      <Heading size="md" color="orange.700" mb={1}>Decisão de Auditoria</Heading>
+                      <Text fontSize="sm" color="orange.600">Analise o material e tome uma ação.</Text>
+                  </Flex>
+
+                  <Box flex="1" overflowY="auto" p={6}>
+                      <VStack align="stretch" spacing={6}>
+                          
+                          <Box bg="gray.50" p={4} borderRadius="md" border="1px solid" borderColor="gray.200">
+                              <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Aluno</Text>
+                              <Text fontWeight="bold" color="gray.800" mb={2}>{redacaoAuditando.aluno_nome}</Text>
+                              <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Tema</Text>
+                              <Text fontSize="sm" color="gray.700" fontWeight="bold">{redacaoAuditando.tema_titulo}</Text>
+                          </Box>
+
+                          <Alert status="error" variant="left-accent" borderRadius="md" flexDirection="column" alignItems="start" p={4} bg="red.50" border="1px solid" borderColor="red.100">
+                              <HStack mb={2}><WarningIcon color="red.500" /><Text fontWeight="bold" fontSize="sm" color="red.800">Relato do Professor:</Text></HStack>
+                              <Text fontSize="sm" color="red.700" w="full" fontStyle="italic">
+                                  "{redacaoAuditando.correcao?.comentario_geral || 'Nenhum detalhe fornecido.'}"
+                              </Text>
+                          </Alert>
+
+                          <Divider borderColor="gray.300" />
+
+                          <Box>
+                              <Text fontSize="sm" fontWeight="bold" color="teal.700" mb={2}>Opção 1: O Professor está enganado?</Text>
+                              <Button w="full" colorScheme="blue" variant="outline" onClick={() => resolverAuditoria('VOLTAR_FILA')} isLoading={loadingAudit}>
+                                  Ignorar Sinalização e Voltar
+                              </Button>
+                              <Text fontSize="xs" color="gray.500" mt={1} textAlign="center">A redação volta para a fila para outro professor.</Text>
+                          </Box>
+
+                          <Divider borderColor="gray.300" />
+
+                          <Box>
+                              <Text fontSize="sm" fontWeight="bold" color="red.700" mb={2}>Opção 2: O Professor está certo?</Text>
+                              <FormControl mb={3}>
+                                  <FormLabel fontSize="xs" color="gray.600">Recado para o aluno (Motivo):</FormLabel>
+                                  <Textarea 
+                                      size="sm" 
+                                      value={mensagemAluno} 
+                                      onChange={(e) => setMensagemAluno(e.target.value)} 
+                                      rows={5} 
+                                      bg="gray.50" 
+                                      placeholder="Ex: Olá! A sua redação foi anulada pois identificamos que o texto está ilegível. Por favor, envie uma nova foto mais nítida..."
+                                  />
+                              </FormControl>
+                              <Button w="full" colorScheme="red" onClick={() => resolverAuditoria('DEVOLVER_ALUNO')} isLoading={loadingAudit}>
+                                  Anular Redação e Estornar Crédito
+                              </Button>
+                              <Text fontSize="xs" color="gray.500" mt={1} textAlign="center">O aluno verá o recado e o crédito volta.</Text>
+                          </Box>
+
+                      </VStack>
+                  </Box>
+              </Box>
+          </Flex>
+      );
+  }
+
+  // =========================================================================
+  // RENDERIZAÇÃO DA TORRE DE CONTROLE (PADRÃO)
+  // =========================================================================
   return (
     <Container maxW="full" py={8} px={{ base: 4, md: 8 }} bg="gray.50" minH="100vh">
       <VStack spacing={6} align="stretch">
@@ -129,7 +228,6 @@ function TorreControle() {
             </TabList>
 
             <TabPanels>
-                {/* 1. ABA DE FILA */}
                 <TabPanel p={0}>
                     <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
                         <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="yellow.400"><Box p={5}><Stat><StatLabel color="gray.500">Na Fila (Aguardando)</StatLabel><StatNumber fontSize="3xl" color="yellow.600">{redacoes.filter(r => r.status === 'AGUARDANDO').length}</StatNumber></Stat></Box></Card>
@@ -162,7 +260,6 @@ function TorreControle() {
                     </Box>
                 </TabPanel>
 
-                {/* 2. NOVA ABA DE AUDITORIA */}
                 <TabPanel p={0}>
                     <Card bg="orange.50" shadow="sm" borderRadius="lg" overflowX="auto" border="1px solid" borderColor="orange.200">
                         <Table variant="simple">
@@ -203,7 +300,6 @@ function TorreControle() {
         </Tabs>
       </VStack>
 
-      {/* MODAL LIBERAR REDAÇÃO FORÇADA */}
       <Modal isOpen={modalAlerta.isOpen} onClose={modalAlerta.onClose} isCentered size="sm">
         <ModalOverlay backdropFilter="blur(2px)" />
         <ModalContent borderRadius="xl">
@@ -221,70 +317,6 @@ function TorreControle() {
             </ModalFooter>
         </ModalContent>
       </Modal>
-      
-      {/* NOVO MODAL: JULGAMENTO (AUDITORIA) */}
-      <Modal isOpen={modalAuditoria.isOpen} onClose={modalAuditoria.onClose} size="3xl" isCentered>
-            <ModalOverlay backdropFilter="blur(4px)" />
-            <ModalContent borderRadius="xl">
-                <ModalHeader color="orange.600" borderBottom="1px solid" borderColor="gray.100">
-                    <HStack><WarningTwoIcon /> <Text>Julgar Redação Sinalizada</Text></HStack>
-                </ModalHeader>
-                <ModalCloseButton />
-                
-                {redacaoAuditando && (
-                <ModalBody py={6}>
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                        {/* Lado Esquerdo: Redação do Aluno */}
-                        <Box>
-                            <Text fontSize="sm" fontWeight="bold" color="gray.700" mb={2}>Material Enviado pelo Aluno:</Text>
-                            <Box bg="gray.100" p={2} borderRadius="md" border="1px solid" borderColor="gray.200" h="300px" overflowY="auto">
-                                {redacaoAuditando.texto ? (
-                                    <Text fontSize="sm" whiteSpace="pre-wrap" bg="white" p={3} borderRadius="md">{redacaoAuditando.texto}</Text>
-                                ) : (
-                                    <Image src={redacaoAuditando.arquivo} alt="Foto da Redação" borderRadius="md" w="full" />
-                                )}
-                            </Box>
-                        </Box>
-
-                        {/* Lado Direito: O Relato do Professor e Ações */}
-                        <VStack align="stretch" spacing={4}>
-                            <Alert status="error" variant="subtle" borderRadius="md" flexDirection="column" alignItems="start" p={4}>
-                                <HStack mb={2}><WarningIcon color="red.500" /><Text fontWeight="bold" fontSize="sm" color="red.800">Relato do Corretor:</Text></HStack>
-                                <Text fontSize="sm" color="red.700" bg="white" p={3} borderRadius="md" w="full" fontStyle="italic" border="1px solid" borderColor="red.100">
-                                    "{redacaoAuditando.correcao?.comentario_geral || 'Nenhum detalhe fornecido.'}"
-                                </Text>
-                            </Alert>
-
-                            <Divider />
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight="bold" color="teal.700" mb={2}>O Corretor está enganado?</Text>
-                                <Button w="full" colorScheme="blue" variant="outline" onClick={() => resolverAuditoria('VOLTAR_FILA')} isLoading={loadingAudit}>
-                                    Ignorar Sinalização e Voltar para Fila
-                                </Button>
-                                <Text fontSize="xs" color="gray.500" mt={1} textAlign="center">A redação ficará disponível para outro professor corrigir.</Text>
-                            </Box>
-
-                            <Divider />
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight="bold" color="red.700" mb={2}>O Corretor está certo?</Text>
-                                <FormControl mb={3}>
-                                    <FormLabel fontSize="xs" color="gray.600">Recado para o aluno (Motivo da Anulação):</FormLabel>
-                                    <Textarea size="sm" value={mensagemAluno} onChange={(e) => setMensagemAluno(e.target.value)} rows={3} bg="gray.50" />
-                                </FormControl>
-                                <Button w="full" colorScheme="red" onClick={() => resolverAuditoria('DEVOLVER_ALUNO')} isLoading={loadingAudit}>
-                                    Anular Redação e Estornar Crédito
-                                </Button>
-                                <Text fontSize="xs" color="gray.500" mt={1} textAlign="center">O aluno verá o recado e receberá +1 crédito de volta.</Text>
-                            </Box>
-
-                        </VStack>
-                    </SimpleGrid>
-                </ModalBody>
-                )}
-            </ModalContent>
-        </Modal>
 
     </Container>
   );

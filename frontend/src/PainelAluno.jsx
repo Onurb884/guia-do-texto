@@ -212,6 +212,19 @@ const PainelAluno = () => {
 
   useEffect(() => { carregarDadosIniciais(); }, []);
 
+  // --- INÍCIO DA ATUALIZAÇÃO AUTOMÁTICA PARA O ALUNO ---
+  useEffect(() => {
+      let interval;
+      // Atualiza os dados a cada 15 segundos se o aluno estiver no dashboard ou no histórico
+      if (passo === 'dashboard' || passo === 'historico') {
+          interval = setInterval(() => {
+              carregarDadosIniciais();
+          }, 15000);
+      }
+      return () => clearInterval(interval);
+  }, [passo]);
+  // --- FIM DA ATUALIZAÇÃO AUTOMÁTICA ---
+
   useEffect(() => {
       const params = new URLSearchParams(location.search);
       const checkoutId = params.get('checkout');

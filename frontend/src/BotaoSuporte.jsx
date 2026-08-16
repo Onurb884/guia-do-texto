@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Box, IconButton, Popover, PopoverTrigger, PopoverContent, 
   PopoverHeader, PopoverBody, PopoverCloseButton, 
-  Input, Button, VStack, Text, Flex, Avatar, InputGroup, InputRightElement
+  Button, VStack, Text, Flex, Avatar, InputGroup, InputRightElement,
+  Textarea // <-- Importamos o Textarea do Chakra UI
 } from '@chakra-ui/react';
 import { ChatIcon } from '@chakra-ui/icons';
-import { IoSend } from 'react-icons/io5'; // npm install react-icons
+import { IoSend } from 'react-icons/io5'; 
 
 function BotaoSuporte() {
   const [mensagens, setMensagens] = useState([
@@ -14,35 +15,71 @@ function BotaoSuporte() {
   const [input, setInput] = useState('');
   const [escrevendo, setEscrevendo] = useState(false);
   const fimDoChatRef = useRef(null);
+  const textareaRef = useRef(null);
 
   // Faz scroll automático para o fundo quando há nova mensagem
   useEffect(() => {
     fimDoChatRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
 
-  const handleEnviar = () => {
+  const handleEnviar = async () => {
     if (!input.trim()) return;
 
-    // 1. Adiciona a mensagem do Aluno
-    const novaMensagemAluno = { remetente: 'aluno', texto: input };
+    // 1. Adiciona a mensagem do Aluno na tela imediatamente
+    const mensagemAtual = input;
+    const novaMensagemAluno = { remetente: 'aluno', texto: mensagemAtual };
     setMensagens((prev) => [...prev, novaMensagemAluno]);
+    
+    // Limpa o campo e mostra o status "A escrever..."
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setEscrevendo(true);
 
-    // 2. Simula o "Pensamento" da IA e a resposta
-    setTimeout(() => {
-      setEscrevendo(false);
-      setMensagens((prev) => [...prev, { 
-          remetente: 'ia', 
-          texto: 'Entendi! Como ainda estou em fase de testes e aprendizado, vou transferir a sua dúvida diretamente para a nossa equipa de especialistas humanos. Um momento, por favor...' 
-      }]);
-      
-      // Aqui, no futuro, nós disparamos a mensagem real para o Backend (Painel do Gestor ou integração com WhatsApp Business API)
-    }, 1500);
+    try {
+        // Pega o token de login do aluno (ajuste 'token' se você salvou com outro nome no seu Login.jsx)
+        const token = localStorage.getItem('token'); 
+
+        // 2. Dispara a mensagem para a nossa IA no Django
+        const resposta = await fetch('http://localhost:8000/api/chat-assistente/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ mensagem: mensagemAtual })
+        });
+
+        const dados = await resposta.json();
+
+        if (resposta.ok) {
+            // 3. Recebe a resposta do Gemini e joga na tela
+            setMensagens((prev) => [...prev, { remetente: 'ia', texto: dados.resposta }]);
+        } else {
+            console.error("Erro do servidor:", dados.erro);
+            setMensagens((prev) => [...prev, { 
+                remetente: 'ia', 
+                texto: 'Desculpe, ocorreu um erro de comunicação com o sistema. Tente novamente em instantes.' 
+            }]);
+        }
+    } catch (erro) {
+        console.error("Erro de conexão:", erro);
+        setMensagens((prev) => [...prev, { 
+            remetente: 'ia', 
+            texto: 'Parece que você está sem internet ou nosso servidor está reiniciando.' 
+        }]);
+    } finally {
+        setEscrevendo(false);
+    }
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') handleEnviar();
+    // Se apertar Enter (sem segurar Shift), envia a mensagem
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Evita que pule uma linha antes de enviar
+      handleEnviar();
+    }
   };
 
   return (
@@ -91,7 +128,7 @@ function BotaoSuporte() {
                     border={msg.remetente === 'ia' ? '1px solid' : 'none'}
                     borderColor="gray.200"
                   >
-                    <Text fontSize="sm">{msg.texto}</Text>
+                    <Text fontSize="sm" whiteSpace="pre-wrap">{msg.texto}</Text>
                   </Box>
                 </Flex>
               ))}
@@ -108,20 +145,32 @@ function BotaoSuporte() {
             </VStack>
           </PopoverBody>
 
-          {/* Área de Digitação */}
+          {/* Nova Área de Digitação com Textarea */}
           <Box p={3} bg="white" borderTop="1px solid" borderColor="gray.100">
-            <InputGroup size="md">
-              <Input 
+            <InputGroup size="md" alignItems="center">
+              <Textarea 
+                ref={textareaRef} // Conecta a referência
                 pr="3rem" 
                 placeholder="Escreva a sua dúvida..." 
-                borderRadius="full"
+                borderRadius="xl"
                 bg="gray.50"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Mágica do Auto-Resize:
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
                 onKeyDown={handleKeyPress}
                 _focus={{ borderColor: 'teal.400', bg: 'white' }}
+                resize="none"
+                minH="45px"       // Altura inicial (1 linha e meia)
+                maxH="120px"      // Altura máxima (após umas 4 linhas, ele para de crescer e rola internamente)
+                overflowY="auto"  // Permite rolagem suave se passar de 120px
+                rows={1}
+                py={3} // Padding vertical para o texto não ficar colado nas bordas
               />
-              <InputRightElement width="3rem">
+              <InputRightElement h="100%" width="3rem" alignItems="center">
                 <IconButton 
                   h="1.75rem" size="sm" isRound colorScheme="teal" variant="ghost" 
                   icon={<IoSend />} 

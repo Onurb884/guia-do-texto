@@ -2,8 +2,11 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings 
 from django.utils import timezone
+from django.conf import settings
 
 class ConfiguracaoSistema(models.Model):
+    razao_social_plataforma = models.CharField(max_length=255, default="Guia do Texto Plataforma Educacional")
+    cnpj_plataforma = models.CharField(max_length=20, default="00.000.000/0001-00")
     tempo_limite_enem_minutos = models.IntegerField(default=40)
     tempo_limite_simples_minutos = models.IntegerField(default=25)
     valor_pagamento_enem = models.DecimalField(max_digits=10, decimal_places=2, default=4.00)
@@ -101,10 +104,44 @@ class RespostaRapida(models.Model):
     texto = models.TextField()
     criado_em = models.DateTimeField(auto_now_add=True)
 
+# =========================================================
+# TABELAS FINANCEIRAS DO CORRETOR (ATUALIZADO)
+# =========================================================
+
 class Carteira(models.Model):
     corretor = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='carteira')
     saldo_atual = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    saque_solicitado = models.BooleanField(default=False)
+    qtd_normal_pendente = models.IntegerField(default=0)
+    qtd_vip_pendente = models.IntegerField(default=0)
+    
     def __str__(self): return f"Carteira - R$ {self.saldo_atual}"
+
+class PagamentoCorretor(models.Model):
+    STATUS_CHOICES = [
+        ('AGUARDANDO_RECIBO', 'Aguardando Recibo Assinado'),
+        ('EM_ANALISE', 'Em Análise pelo Financeiro'),
+        ('PAGO', 'Pagamento Efetuado'),
+        ('RECUSADO', 'Recibo Recusado')
+    ]
+    corretor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pagamentos_recebidos')
+    
+    # Datas de controlo
+    data_solicitacao = models.DateTimeField(auto_now_add=True)
+    data_pagamento = models.DateTimeField(null=True, blank=True)
+    
+    # Valores
+    valor = models.DecimalField(max_digits=10, decimal_places=2)
+    qtd_normal = models.IntegerField(default=0)
+    qtd_vip = models.IntegerField(default=0)
+    
+    # Compliance (A Nova Mágica)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='AGUARDANDO_RECIBO')
+    arquivo_recibo = models.FileField(upload_to='recibos_assinados/', null=True, blank=True)
+    motivo_recusa = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Pagamento #{self.id} - {self.corretor.username} - {self.status}"
 
 # =========================================================
 # TABELAS: PACOTES, CUPONS, HISTÓRICO E VITRINE

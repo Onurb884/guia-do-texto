@@ -1,4 +1,5 @@
-import google.generativeai as genai # type: ignore
+from google import genai
+from google.genai import types # type: ignore
 import json
 import mercadopago # type: ignore
 import uuid
@@ -34,7 +35,7 @@ from google.auth.transport import requests as google_requests # type: ignore
 from .models import (
     RespostaRapida, Redacao, Tema, Correcao, NotaCompetencia, Anotacao, 
     ConfiguracaoSistema, Carteira, CarteiraAluno, Transacao, Pacote, Cupom, 
-    BannerVitrine, HistoricoCompra, TextoMotivador, MaterialApoio
+    BannerVitrine, HistoricoCompra, TextoMotivador, MaterialApoio, PagamentoCorretor
 )
 from .serializers import (
     RespostaRapidaSerializer, RedacaoSerializer, RedacaoFilaSerializer, 
@@ -74,7 +75,7 @@ class CadastrarUsuarioView(APIView):
     
     def post(self, request):
         first_name = request.data.get('first_name')
-        last_name = request.data.get('last_name', '') # <-- RECEBE O SOBRENOME
+        last_name = request.data.get('last_name', '')
         email = request.data.get('email')
         password = request.data.get('password')
         
@@ -86,7 +87,7 @@ class CadastrarUsuarioView(APIView):
             email=email, 
             password=password, 
             first_name=first_name,
-            last_name=last_name # <-- GRAVA NO BANCO
+            last_name=last_name
         )
         return Response({'mensagem': 'Conta criada com sucesso'}, status=status.HTTP_201_CREATED)
 
@@ -131,7 +132,6 @@ class CandidaturaCorretorView(APIView):
             return Response({'erro': 'Este CPF já está cadastrado.'}, status=status.HTTP_400_BAD_REQUEST)
             
         try:
-            # Junta a agência e conta antes de gravar para manter o padrão do banco de dados
             agencia = request.data.get('agencia', '')
             conta = request.data.get('conta', '')
             agencia_conta_formatada = f"Ag: {agencia} Cc: {conta}" if (agencia or conta) else ""
@@ -216,29 +216,17 @@ class TemaViewSet(viewsets.ModelViewSet):
         """
         
         try:
-            genai.configure(api_key=settings.GEMINI_API_KEY) 
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
             
-            modelos_disponiveis = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    modelos_disponiveis.append(m.name)
-            
-            modelo_escolhido = modelos_disponiveis[0] if modelos_disponiveis else 'gemini-pro'
-            for nome in modelos_disponiveis:
-                if 'flash' in nome.lower(): 
-                    modelo_escolhido = nome
-                    break
-            
-            print(f"🧠 IA Repertório: Usando o modelo dinâmico -> {modelo_escolhido}")
-            
-            model = genai.GenerativeModel(modelo_escolhido) 
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
             
             texto_html = response.text.replace("```html", "").replace("```", "").strip()
             return Response({"html": texto_html})
         
         except Exception as e:
-            print(f"🔴 ERRO FATAL NO GEMINI (REPERTÓRIOS): {str(e)}")
             return Response({"erro": str(e)}, status=500)
 
     def get_permissions(self):
@@ -283,7 +271,6 @@ class MeusDadosView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        # AGORA O DJANGO DEVOLVE TODOS OS DADOS BANCÁRIOS PARA O REACT LER!
         return Response({
             "id": request.user.id, "username": request.user.username, "email": request.user.email,
             "first_name": request.user.first_name, "last_name": request.user.last_name,
@@ -306,7 +293,6 @@ class MeusDadosView(APIView):
         if 'cpf' in data: user.cpf = data['cpf']
         if 'password' in data and data['password'].strip() != '': user.set_password(data['password'])
         
-        # --- SALVA OS NOVOS CAMPOS DO CORRETOR E DO ADMIN ---
         if 'chave_pix' in data: user.chave_pix = data['chave_pix']
         if 'tipo_chave_pix' in data: user.tipo_chave_pix = data['tipo_chave_pix']
         if 'banco' in data: user.banco = data['banco']
@@ -314,7 +300,6 @@ class MeusDadosView(APIView):
         agencia = data.get('agencia', '')
         conta = data.get('conta', '')
         
-        # Junta a agência e conta se tiverem sido preenchidas, ou limpa se apagadas
         if agencia or conta:
             user.agencia_conta = f"Ag: {agencia} Cc: {conta}"
         elif 'agencia' in data and 'conta' in data:
@@ -434,20 +419,18 @@ class EntregarCorrecaoView(APIView):
                 config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
                 tipo_tema = redacao.tema.tipo if redacao.tema else 'ENEM'
                 valor_base = config.valor_pagamento_simples if tipo_tema == 'SIMPLES' else config.valor_pagamento_enem
-                valor_bonus = 0
-                if redacao.is_urgente or getattr(redacao, 'vip_pago', False):
-                    valor_bonus = config.valor_bonus_vip
-                    
-                valor_total = valor_base + valor_bonus
-                carteira, _ = Carteira.objects.get_or_create(corretor=request.user)
-                carteira.saldo_atual += valor_total
-                carteira.save()
                 
-                descricao = f"Correção {tipo_tema} (#{redacao.id})"
-                if valor_bonus > 0: descricao += " + Bônus Especial"
+                carteira, _ = Carteira.objects.get_or_create(corretor=request.user)
+                
+                if redacao.is_urgente or getattr(redacao, 'vip_pago', False):
+                    carteira.qtd_vip_pendente += 1
+                    carteira.saldo_atual += (valor_base + config.valor_bonus_vip)
+                else:
+                    carteira.qtd_normal_pendente += 1
+                    carteira.saldo_atual += valor_base
                     
-                Transacao.objects.create(corretor=request.user, redacao=redacao, tipo='CREDITO', valor=valor_total, descricao=descricao)
-
+                carteira.save()                
+                
             return Response({"mensagem": "Salva e Dinheiro Creditado!"}, status=200)
         except Exception as e:
             return Response({"erro": str(e)}, status=400)
@@ -636,7 +619,6 @@ class AdicionarCreditoManualView(APIView):
             carteira = CarteiraAluno.objects.filter(aluno_id=user_id).first()
             
             if not carteira:
-                User = get_user_model()
                 user = User.objects.get(pk=user_id)
                 carteira = CarteiraAluno.objects.create(aluno=user, saldo_simples=0, saldo_vip=0)
 
@@ -651,8 +633,6 @@ class AdicionarCreditoManualView(APIView):
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            import traceback
-            print(traceback.format_exc()) 
             return Response({'erro': f'Erro no servidor: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CorrecaoIAView(APIView):
@@ -675,30 +655,7 @@ class CorrecaoIAView(APIView):
                 except Exception as e:
                     return Response({"erro": f"Não foi possível processar a imagem da redação: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            
-            modelos_disponiveis = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    modelos_disponiveis.append(m.name)
-            
-            if not modelos_disponiveis:
-                return Response({"erro": "Nenhum modelo Gemini disponível para esta chave de API."}, status=500)
-
-            modelo_escolhido = modelos_disponiveis[0]
-            if imagem_para_ia:
-                for nome in modelos_disponiveis:
-                    if 'vision' in nome.lower() or 'flash' in nome.lower():
-                        modelo_escolhido = nome
-                        break
-            else:
-                for nome in modelos_disponiveis:
-                    if 'flash' in nome.lower(): 
-                        modelo_escolhido = nome
-                        break
-                        
-            print(f"🤖 IA Correção: Usando o modelo -> {modelo_escolhido}")
-            model = genai.GenerativeModel(modelo_escolhido)
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
             contexto_aluno = f'Redação digitada: "{texto_aluno}"' if texto_aluno else 'Leia atentamente a redação manuscrita na imagem que enviei. Tente decifrar a caligrafia do aluno para poder avaliá-la.'
 
@@ -735,7 +692,10 @@ class CorrecaoIAView(APIView):
             if imagem_para_ia:
                 conteudo_envio.append(imagem_para_ia)
 
-            response = model.generate_content(conteudo_envio)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=conteudo_envio
+            )
 
             texto_sujo = response.text.strip()
             if "```json" in texto_sujo:
@@ -748,12 +708,8 @@ class CorrecaoIAView(APIView):
             return Response(dados_ia, status=status.HTTP_200_OK)
 
         except Exception as e:
-            import traceback
-            print("================= ERRO GRAVE NA IA =================")
-            traceback.print_exc()
-            print("====================================================")
             return Response({"erro": f"Erro interno: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 class ReportarProblemaView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -775,7 +731,6 @@ class ReportarProblemaView(APIView):
             redacao.save()
             return Response({"mensagem": "Redação enviada para a coordenação com sucesso."}, status=status.HTTP_200_OK)
         except Exception as e:
-            print(f"ERRO AO SINALIZAR: {str(e)}")
             return Response({"erro": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class ResolverAuditoriaView(APIView):
@@ -804,7 +759,7 @@ class ResolverAuditoriaView(APIView):
                 carteira.save()
 
             elif acao == 'VOLTAR_FILA':
-                redacao.status = 'PENDENTE'
+                redacao.status = 'AGUARDANDO'
                 redacao.corretor_atual = None
                 redacao.save()
                 Correcao.objects.filter(redacao=redacao).delete()
@@ -844,20 +799,19 @@ class SolicitarRecuperacaoSenhaView(APIView):
             assunto = "Recuperação de Senha - Guia do Texto"
             mensagem = f"""Olá {user.first_name},
 
-Recebemos um pedido para redefinir a senha da sua conta no Guia do Texto.
+            Recebemos um pedido para redefinir a senha da sua conta no Guia do Texto.
 
-Clique no link abaixo para criar uma nova senha:
-{link_frontend}
+            Clique no link abaixo para criar uma nova senha:
+            {link_frontend}
 
-Se não foi você que fez este pedido, pode ignorar este e-mail em segurança.
+            Se não foi você que fez este pedido, pode ignorar este e-mail em segurança.
 
-Abraços,
-Equipa Guia do Texto
-"""
+            Abraços,
+            Equipe Guia do Texto
+            """
             try:
                 send_mail(assunto, mensagem, settings.DEFAULT_FROM_EMAIL, [user.email])
             except Exception as e:
-                print("Erro ao enviar e-mail:", e)
                 return Response({'erro': 'Erro no servidor de e-mail.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         return Response({'mensagem': 'Se o e-mail estiver registado, receberá um link em breve.'}, status=status.HTTP_200_OK)
@@ -1030,23 +984,14 @@ class GerarLinkPagamentoCartaoView(APIView):
             preference = preference_response["response"]
 
             if "init_point" not in preference:
-                if preference.get("cause"):
-                    msg_erro = f"Erro MP: {preference['cause'][0].get('description', '')}"
-                elif preference.get("message"):
-                    msg_erro = f"Erro MP: {preference['message']}"
-                else:
-                    msg_erro = "O Mercado Pago recusou a geração do link."
-                return Response({'erro': msg_erro}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'erro': "O Mercado Pago recusou a geração do link."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # DEVOLVE O LINK DE PAGAMENTO E O ID DA TRANSAÇÃO PARA O REACT!
             return Response({
                 'link_pagamento': preference["init_point"],
                 'transacao_id': transacao.id 
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            import traceback
-            print(traceback.format_exc())
             return Response({'erro': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ProcessarRetornoMercadoPagoView(APIView):
@@ -1096,17 +1041,13 @@ class GestaoFinanceiraView(APIView):
             faturamento_mes = 0
             aguardando_pagamento = 0
 
-            # 1. BUSCA O DINHEIRO DO MERCADO PAGO (PIX E CARTÃO)
             todas_transacoes = Transacao.objects.all()
             for t in todas_transacoes:
-                # Ignora transações de folha de pagamento para não somar no lucro
                 if getattr(t, 'tipo', '') in ['CREDITO', 'DEBITO']:
                     continue
                     
                 status_t = getattr(t, 'status', '').upper()
                 valor_t = float(getattr(t, 'valor', 0) or 0)
-                
-                # Procura a data seja qual for o nome da coluna no models
                 data_t = getattr(t, 'data_atualizacao', getattr(t, 'criado_em', getattr(t, 'data_criacao', getattr(t, 'data_envio', getattr(t, 'data', None)))))
                 
                 is_este_mes = True
@@ -1125,7 +1066,6 @@ class GestaoFinanceiraView(APIView):
                     if is_este_mes:
                         aguardando_pagamento += valor_t
 
-            # 2. BUSCA AS COMPRAS DE PACOTES FEITAS (O seu histórico antigo)
             todos_historicos = HistoricoCompra.objects.all()
             for h in todos_historicos:
                 valor_h = float(getattr(h, 'valor_pago', 0) or 0)
@@ -1143,7 +1083,6 @@ class GestaoFinanceiraView(APIView):
                 if is_este_mes:
                     faturamento_mes += valor_h
 
-            # 3. FOLHA DE PAGAMENTO DOS PROFESSORES
             User = get_user_model()
             corretores = User.objects.filter(is_corretor=True)
             
@@ -1156,13 +1095,52 @@ class GestaoFinanceiraView(APIView):
                 
                 if saldo_devido > 0:
                     total_a_pagar += saldo_devido
+                    nome_completo = f"{prof.first_name or ''} {prof.last_name or ''}".strip()
+                    if not nome_completo: nome_completo = prof.username
+                    
+                    # --- BUSCA A SOLICITAÇÃO ATIVA E O PDF ---
+                    pendente = PagamentoCorretor.objects.filter(
+                        corretor=prof,
+                        status__in=['AGUARDANDO_RECIBO', 'EM_ANALISE', 'RECUSADO']
+                    ).order_by('-data_solicitacao').first()
+                    
                     lista_pagamentos.append({
                         'corretor_id': prof.id,
-                        'nome': prof.first_name or prof.username,
+                        'nome': nome_completo,
                         'email': prof.email,
                         'telefone': getattr(prof, 'telefone', 'Não informado'),
-                        'valor_a_receber': saldo_devido
+                        'chave_pix': getattr(prof, 'chave_pix', ''),
+                        'tipo_chave_pix': getattr(prof, 'tipo_chave_pix', ''),
+                        'banco': getattr(prof, 'banco', ''),
+                        'agencia_conta': getattr(prof, 'agencia_conta', ''),
+                        'valor_a_receber': saldo_devido,
+                        'saque_solicitado': getattr(carteira, 'saque_solicitado', False),
+                        'qtd_normal': getattr(carteira, 'qtd_normal_pendente', 0),
+                        'qtd_vip': getattr(carteira, 'qtd_vip_pendente', 0),
+                        
+                        # DADOS DO NOVO FLUXO RPA
+                        'pagamento_id': pendente.id if pendente else None,
+                        'status_pagamento': pendente.status if pendente else None,
+                        'arquivo_recibo_url': pendente.arquivo_recibo.url if pendente and pendente.arquivo_recibo else None,
+                        'motivo_recusa': pendente.motivo_recusa if pendente else None,
                     })
+
+            pagamentos_historico = PagamentoCorretor.objects.all().order_by('-data_pagamento', '-data_solicitacao')
+            lista_historico_pagamentos = []
+            for p in pagamentos_historico:
+                nome_completo = f"{p.corretor.first_name or ''} {p.corretor.last_name or ''}".strip()
+                if not nome_completo: nome_completo = p.corretor.username
+                lista_historico_pagamentos.append({
+                    'id': p.id,
+                    'corretor_nome': nome_completo,
+                    'email': p.corretor.email,
+                    'data': p.data_pagamento or p.data_solicitacao,
+                    'valor': float(p.valor),
+                    'qtd_normal': p.qtd_normal,
+                    'qtd_vip': p.qtd_vip,
+                    'status': p.status, # <-- ADICIONADO PARA FILTRAR
+                    'arquivo_recibo_url': p.arquivo_recibo.url if p.arquivo_recibo else None # <-- PARA VER O PDF
+                })
 
             return Response({
                 'faturamento_total': faturamento_total,
@@ -1170,31 +1148,13 @@ class GestaoFinanceiraView(APIView):
                 'lucro_bruto_estimado': faturamento_mes - total_a_pagar,
                 'total_a_pagar_corretores': total_a_pagar,
                 'aguardando_pagamento': aguardando_pagamento, 
-                'folha_pagamento': lista_pagamentos
+                'folha_pagamento': lista_pagamentos,
+                'historico_pagamentos': lista_historico_pagamentos 
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            import traceback
-            print(traceback.format_exc())
             return Response({'erro': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class BaixarPagamentoCorretorView(APIView):
-    permission_classes = [IsAdminUser]
-
-    def post(self, request, corretor_id):
-        try:
-            from .models import Carteira
-            carteira = Carteira.objects.filter(corretor_id=corretor_id).first()
-            
-            if carteira:
-                carteira.saldo_atual = 0 
-                carteira.save()
-                return Response({'mensagem': 'Pagamento baixado com sucesso! Saldo zerado.'}, status=status.HTTP_200_OK)
-            
-            return Response({'erro': 'Carteira do corretor não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({'erro': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
 class VerificarPagamentoMPView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1234,3 +1194,166 @@ class VerificarPagamentoMPView(APIView):
                 
         except Exception as e:
             return Response({'erro': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AssistenteSuporteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        mensagem_usuario = request.data.get('mensagem', '')
+
+        if not mensagem_usuario:
+            return Response({'erro': 'A mensagem não pode estar vazia.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            from .models import Pacote, ConfiguracaoSistema
+            
+            pacotes_ativos = Pacote.objects.filter(ativo=True)
+            lista_pacotes_ia = ""
+            for p in pacotes_ativos:
+                lista_pacotes_ia += f"- {p.nome}: R$ {p.preco} (Dá direito a {p.qtd_creditos_simples} correções normais e {p.qtd_creditos_vip} VIPs)\n"
+            
+            if not lista_pacotes_ia:
+                lista_pacotes_ia = "Nenhum pacote promocional disponível no momento."
+
+            config = ConfiguracaoSistema.objects.first()
+            preco_normal = config.preco_avulso_normal if config else 9.90
+            preco_vip = config.preco_avulso_vip if config else 14.90
+
+            regra_sistema = f"""
+            Você é a assistente virtual de suporte da plataforma 'Guia do Texto'.
+            Sua missão é ajudar os alunos a navegar no sistema, tirar dúvidas sobre prazos e explicar nossos pacotes de correção.
+            Seja extremamente educada, prestativa e use um tom amigável.
+            
+            REGRA ABSOLUTA 1: Você NUNCA deve corrigir redações ou dar dicas de gramática. Direcione para a compra de pacotes.
+            
+            REGRA ABSOLUTA 2 (COMO ENVIAR REDAÇÃO): Se um aluno perguntar como enviar um texto ou redação para correção, responda com este exato passo a passo de forma natural:
+            1. No painel principal, clique na aba 'Treinar Redação'.
+            2. Selecione o Tema sobre o qual deseja escrever, a plataforma utiliza dois tipos de correção, ENEM ou Simples.
+            3. Você pode digitar o texto diretamente na plataforma selecionando "Editor Digital" OU anexar uma foto bem legível da sua redação manuscrita selecionando "Modo Manuscrito", sugerimos o "Modo Manuscrito" pois seria uma simulação mais próxima da realidade.
+            4. É necessário ter 'Créditos' na carteira (Simples ou VIP). Se não tiver, basta acessar a 'Loja de Créditos' no sistema para adquirir créditos avulso ou um pacote.
+            5. No "Editor Digital" você pode preencher a redação online e para enviar clique no botão "Enviar Redação".            
+            6. No "Modo Manuscrito" clique em "Imprimir Folha Oficial" para preencher a folha manualmente e depois enviar para a plataforma, você pode imprimir também a proposta da redação para facilitar, após preencher a redação clique no botão "Anexar e Enviar" para anexar sua redação preenchida e clique em "Confirmar Envio".
+            7. Você pode clicar no botão "Brainstorm com IA" para obter repertórios para te ajudar na redação, tanto no "Modo Manuscrito" quanto no "Editor Digital".
+            8. Após enviar é só aguardar a correção detalhada dos nossos professores!
+            
+            Se o aluno perguntar sobre onde ver suas redações corrigidas, explique que é só clicar na aba Minhas Redações e que em Meu Painel ele conseguirá ver um Dashboard com seus pontos e temas corrigidos.
+
+            Se o aluno perguntar sobre se ocorrer algum tipo problema com a sua redação, explique que ele deve ficar tranquilo porque a equipe do Guia do Texto analisará o problema e se for preciso ele terá o crédito de volta.
+            
+            Se o aluno perguntar sobre a diferença de urgência, explique que a redação VIP passa na frente da fila e é corrigida mais rápido.
+
+            INFORMAÇÕES DE VENDAS ATUALIZADAS:
+            O aluno pode comprar créditos avulsos ou pacotes completos.
+            Preços dos Créditos Avulsos:
+            - Correção Normal: R$ {preco_normal}
+            - Correção VIP: R$ {preco_vip}
+            
+            Pacotes Promocionais Disponíveis Atualmente:
+            {lista_pacotes_ia}
+            """
+
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=mensagem_usuario,
+                config=types.GenerateContentConfig(
+                    system_instruction=regra_sistema,
+                    temperature=0.3,
+                )
+            )
+            
+            return Response({'resposta': response.text}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'erro': f'Ocorreu um erro na assistente: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# =======================================================================
+# NOVO FLUXO FINANCEIRO E DE RPA
+# =======================================================================
+
+class SolicitarSaqueView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        carteira, _ = Carteira.objects.get_or_create(corretor=request.user)
+        
+        if carteira.saldo_atual <= 0:
+            return Response({"erro": "Você não possui saldo para saque."}, status=400)
+
+        pendente = PagamentoCorretor.objects.filter(
+            corretor=request.user,
+            status__in=['AGUARDANDO_RECIBO', 'EM_ANALISE']
+        ).exists()
+        
+        if pendente:
+            return Response({"erro": "Você já possui uma solicitação de saque em andamento."}, status=400)
+
+        pagamento = PagamentoCorretor.objects.create(
+            corretor=request.user,
+            valor=carteira.saldo_atual,
+            qtd_normal=carteira.qtd_normal_pendente,
+            qtd_vip=carteira.qtd_vip_pendente,
+            status='AGUARDANDO_RECIBO'
+        )
+        
+        carteira.saque_solicitado = True
+        carteira.save()
+
+        config = ConfiguracaoSistema.objects.first()
+        return Response({
+            "mensagem": "Saque solicitado! Por favor, gere e anexe o recibo assinado.",
+            "pagamento_id": pagamento.id,
+            "empresa_cnpj": config.cnpj_plataforma if config else "00.000.000/0001-00",
+            "empresa_razao_social": config.razao_social_plataforma if config else "Guia do Texto Plataforma Educacional"
+        }, status=201)
+
+class EnviarReciboCorretorView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, pk):
+        pagamento = get_object_or_404(PagamentoCorretor, pk=pk, corretor=request.user)
+        arquivo = request.FILES.get('arquivo_recibo')
+
+        if not arquivo:
+            return Response({"erro": "Por favor, selecione o arquivo do recibo assinado."}, status=400)
+
+        pagamento.arquivo_recibo = arquivo
+        pagamento.status = 'EM_ANALISE'
+        pagamento.motivo_recusa = None
+        pagamento.save()
+
+        return Response({"mensagem": "Recibo enviado para análise financeira com sucesso!"}, status=200)
+
+class BaixarPagamentoView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, pk):
+        pagamento = get_object_or_404(PagamentoCorretor, pk=pk)
+        
+        pagamento.status = 'PAGO'
+        pagamento.data_pagamento = timezone.now()
+        pagamento.save()
+
+        carteira = Carteira.objects.filter(corretor=pagamento.corretor).first()
+        if carteira:
+            carteira.saldo_atual = max(0, carteira.saldo_atual - pagamento.valor)
+            carteira.qtd_normal_pendente = 0
+            carteira.qtd_vip_pendente = 0
+            carteira.saque_solicitado = False
+            carteira.save()
+
+        return Response({"mensagem": f"Pagamento #{pagamento.id} marcado como PAGO com sucesso!"}, status=200)
+
+class RecusarReciboView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, pk):
+        pagamento = get_object_or_404(PagamentoCorretor, pk=pk)
+        motivo = request.data.get('motivo_recusa', 'Recibo ilegível ou sem assinatura.')
+
+        pagamento.status = 'RECUSADO'
+        pagamento.motivo_recusa = motivo
+        pagamento.save()
+
+        return Response({"mensagem": "Recibo recusado. O corretor foi notificado para reenvio."}, status=200)
