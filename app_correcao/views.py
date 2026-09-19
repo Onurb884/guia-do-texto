@@ -3,6 +3,7 @@ from google.genai import types # type: ignore
 import json
 import mercadopago # type: ignore
 import uuid
+import random
 
 from django.core.mail import send_mail
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -12,7 +13,9 @@ from django.utils.encoding import force_str
 from django.utils.encoding import force_bytes
 from django.conf import settings
 from PIL import Image # type: ignore
-from rest_framework.decorators import action
+
+# --- A CORREÇÃO FOI FEITA NESTA LINHA ABAIXO ---
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -156,20 +159,180 @@ class CandidaturaCorretorView(APIView):
             return Response({'erro': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # =======================================================================
+# MEU PERFIL (ATUALIZADO PARA FOTOS E CARGOS DA REDE SOCIAL)
+# =======================================================================
+
+class MeusDadosView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser] 
+    
+    def get(self, request):
+        foto_url = request.user.foto_perfil.url if request.user.foto_perfil else None
+        
+        formacoes = request.user.formacoes
+        if isinstance(formacoes, str):
+            try: formacoes = json.loads(formacoes)
+            except: formacoes = []
+            
+        experiencias = request.user.experiencias
+        if isinstance(experiencias, str):
+            try: experiencias = json.loads(experiencias)
+            except: experiencias = []
+
+        return Response({
+            "id": request.user.id, "username": request.user.username, "email": request.user.email,
+            "first_name": request.user.first_name, "last_name": request.user.last_name,
+            "telefone": getattr(request.user, 'telefone', ''), "cpf": getattr(request.user, 'cpf', ''),
+            "chave_pix": getattr(request.user, 'chave_pix', ''),
+            "tipo_chave_pix": getattr(request.user, 'tipo_chave_pix', ''),
+            "banco": getattr(request.user, 'banco', ''),
+            "agencia_conta": getattr(request.user, 'agencia_conta', ''),
+            "minibio": getattr(request.user, 'minibio', ''),
+            "formacoes": formacoes or [],
+            "experiencias": experiencias or [],
+            "is_corretor": getattr(request.user, 'is_corretor', False), 
+            "is_coordenador": getattr(request.user, 'is_coordenador', False), 
+            "is_financeiro": getattr(request.user, 'is_financeiro', False), 
+            "is_staff": request.user.is_staff, 
+            "is_superuser": request.user.is_superuser,
+            "foto_perfil": foto_url
+        })
+
+    def patch(self, request):
+        user = request.user
+        data = request.data
+        if 'first_name' in data: user.first_name = data['first_name']
+        if 'last_name' in data: user.last_name = data['last_name']
+        if 'telefone' in data: user.telefone = data['telefone']
+        if 'cpf' in data: user.cpf = data['cpf']
+        if 'password' in data and data['password'].strip() != '': user.set_password(data['password'])
+        
+        if 'chave_pix' in data: user.chave_pix = data['chave_pix']
+        if 'tipo_chave_pix' in data: user.tipo_chave_pix = data['tipo_chave_pix']
+        if 'banco' in data: user.banco = data['banco']
+        if 'minibio' in data: user.minibio = data['minibio']
+        
+        if 'formacoes' in data:
+            try: user.formacoes = json.loads(data['formacoes'])
+            except: user.formacoes = data['formacoes']
+                
+        if 'experiencias' in data:
+            try: user.experiencias = json.loads(data['experiencias'])
+            except: user.experiencias = data['experiencias']
+        
+        if 'foto_perfil' in request.FILES:
+            user.foto_perfil = request.FILES['foto_perfil']
+            
+        agencia = data.get('agencia', '')
+        conta = data.get('conta', '')
+        if agencia or conta:
+            user.agencia_conta = f"Ag: {agencia} Cc: {conta}"
+        elif 'agencia' in data and 'conta' in data:
+            user.agencia_conta = ""
+            
+        user.save()
+        return Response({"mensagem": "Dados atualizados com sucesso!"}, status=status.HTTP_200_OK)
+
+# =======================================================================
+# GESTÃO DE USUÁRIOS (COM TRAVÃO DE SEGURANÇA PARA A COORDENAÇÃO)
+# =======================================================================
+
+class GestaoUsuariosViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by('-date_joined')
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser] 
+    parser_classes = [MultiPartParser, FormParser, JSONParser] 
+
+    def create(self, request, *args, **kwargs):
+        user_logado = request.user
+        nivel_acesso = request.data.get('nivel_acesso', 'ALUNO')
+        
+        if not user_logado.is_superuser:
+            if nivel_acesso in ['MASTER', 'FINANCEIRO', 'COORDENADOR']:
+                return Response({'erro': 'Apenas o Admin Master pode criar cargos administrativos.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        email = request.data.get('email')
+        if User.objects.filter(email=email).exists() or User.objects.filter(username=email).exists():
+            return Response({'erro': 'Este e-mail já está cadastrado no sistema.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        novo_user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=request.data.get('password'),
+            first_name=request.data.get('first_name', ''),
+            last_name=request.data.get('last_name', '')
+        )
+        
+        self._aplicar_permissoes(novo_user, nivel_acesso)
+        return Response({"mensagem": "Usuário criado com sucesso!"}, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user_logado = request.user
+        nivel_acesso = request.data.get('nivel_acesso')
+        
+        if not user_logado.is_superuser:
+            if instance.is_superuser or getattr(instance, 'is_financeiro', False) or getattr(instance, 'is_coordenador', False):
+                return Response({'erro': 'Você não tem permissão para editar cargos administrativos da empresa.'}, status=status.HTTP_403_FORBIDDEN)
+            if nivel_acesso in ['MASTER', 'FINANCEIRO', 'COORDENADOR']:
+                return Response({'erro': 'Você não tem autorização para promover este utilizador a cargos administrativos.'}, status=status.HTTP_403_FORBIDDEN)
+
+        instance.first_name = request.data.get('first_name', instance.first_name)
+        instance.last_name = request.data.get('last_name', instance.last_name)
+        instance.email = request.data.get('email', instance.email)
+        instance.username = request.data.get('email', instance.username)
+        
+        nova_senha = request.data.get('password')
+        if nova_senha and nova_senha.strip():
+            instance.set_password(nova_senha)
+            
+        if nivel_acesso:
+            self._aplicar_permissoes(instance, nivel_acesso)
+        else:
+            instance.save()
+            
+        return Response({"mensagem": "Usuário editado com sucesso!"})
+
+    def _aplicar_permissoes(self, user, nivel):
+        user.is_superuser = False
+        user.is_staff = False
+        user.is_coordenador = False
+        user.is_financeiro = False
+        user.is_corretor = False
+        
+        if nivel == 'MASTER':
+            user.is_superuser = True
+            user.is_staff = True
+        elif nivel == 'FINANCEIRO':
+            user.is_financeiro = True
+            user.is_staff = True
+        elif nivel == 'COORDENADOR':
+            user.is_coordenador = True
+            user.is_staff = True
+        elif nivel == 'CORRETOR':
+            user.is_corretor = True
+        
+        user.save()
+
+
+# =======================================================================
 # SISTEMA DE REDAÇÕES E IA
 # =======================================================================
 
 def limpar_redacoes_expiradas():
     config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
     agora = timezone.now()
-    redacoes_em_correcao = Redacao.objects.filter(status='EM_CORRECAO', data_inicio_correcao__isnull=False)
+    redacoes_em_correcao = Redacao.objects.filter(status__in=['EM_CORRECAO', 'REFAZER'], data_inicio_correcao__isnull=False)
     for redacao in redacoes_em_correcao:
         tipo = redacao.tema.tipo if redacao.tema else 'ENEM'
         minutos_limite = config.tempo_limite_simples_minutos if tipo == 'SIMPLES' else config.tempo_limite_enem_minutos
         tempo_esgotado = redacao.data_inicio_correcao + timedelta(minutes=minutos_limite)
         if agora > tempo_esgotado:
-            redacao.status = 'AGUARDANDO'
-            redacao.corretor_atual = None
+            if hasattr(redacao, 'correcao'):
+                redacao.status = 'REFAZER' 
+            else:
+                redacao.status = 'AGUARDANDO'
+                redacao.corretor_atual = None
             redacao.data_inicio_correcao = None
             redacao.save()
 
@@ -217,15 +380,12 @@ class TemaViewSet(viewsets.ModelViewSet):
         
         try:
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=prompt
             )
-            
             texto_html = response.text.replace("```html", "").replace("```", "").strip()
             return Response({"html": texto_html})
-        
         except Exception as e:
             return Response({"erro": str(e)}, status=500)
 
@@ -266,47 +426,6 @@ class TemaViewSet(viewsets.ModelViewSet):
                 data['motivadores'] = motivadores_list
             except json.JSONDecodeError:
                 pass 
-
-class MeusDadosView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get(self, request):
-        return Response({
-            "id": request.user.id, "username": request.user.username, "email": request.user.email,
-            "first_name": request.user.first_name, "last_name": request.user.last_name,
-            "telefone": request.user.telefone, "cpf": request.user.cpf,
-            "chave_pix": getattr(request.user, 'chave_pix', ''),
-            "tipo_chave_pix": getattr(request.user, 'tipo_chave_pix', ''),
-            "banco": getattr(request.user, 'banco', ''),
-            "agencia_conta": getattr(request.user, 'agencia_conta', ''),
-            "is_corretor": getattr(request.user, 'is_corretor', False), 
-            "is_staff": request.user.is_staff, 
-            "is_superuser": request.user.is_superuser
-        })
-
-    def patch(self, request):
-        user = request.user
-        data = request.data
-        if 'first_name' in data: user.first_name = data['first_name']
-        if 'last_name' in data: user.last_name = data['last_name']
-        if 'telefone' in data: user.telefone = data['telefone']
-        if 'cpf' in data: user.cpf = data['cpf']
-        if 'password' in data and data['password'].strip() != '': user.set_password(data['password'])
-        
-        if 'chave_pix' in data: user.chave_pix = data['chave_pix']
-        if 'tipo_chave_pix' in data: user.tipo_chave_pix = data['tipo_chave_pix']
-        if 'banco' in data: user.banco = data['banco']
-        
-        agencia = data.get('agencia', '')
-        conta = data.get('conta', '')
-        
-        if agencia or conta:
-            user.agencia_conta = f"Ag: {agencia} Cc: {conta}"
-        elif 'agencia' in data and 'conta' in data:
-            user.agencia_conta = ""
-            
-        user.save()
-        return Response({"mensagem": "Dados atualizados com sucesso!"}, status=status.HTTP_200_OK)
     
 class MinhasRedacoesView(generics.ListAPIView):
     serializer_class = RedacaoSerializer
@@ -352,26 +471,47 @@ class EnviarRedacaoView(APIView):
             return Response({"erro": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class FilaCorrecaoView(generics.ListAPIView):
-    serializer_class = RedacaoFilaSerializer
+    serializer_class = RedacaoFilaSerializer 
     permission_classes = [permissions.IsAuthenticated, IsCorretor]
+
     def get_queryset(self):
         limpar_redacoes_expiradas()
-        return Redacao.objects.filter(status__in=['AGUARDANDO', 'EM_CORRECAO']).order_by('data_envio')
+        qs_novas = Redacao.objects.filter(status__in=['AGUARDANDO', 'EM_CORRECAO'])
+        qs_refazer = Redacao.objects.filter(status='REFAZER', corretor_atual=self.request.user)
+        return (qs_novas | qs_refazer).distinct().order_by('data_envio')
 
-class HistoricoCorretorView(generics.ListAPIView):
-    serializer_class = RedacaoSerializer
+class HistoricoCorretorView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCorretor]
-    def get_queryset(self):
-        return Redacao.objects.filter(corretor_atual=self.request.user, status='CORRIGIDA').order_by('-data_envio')
+
+    def get(self, request):
+        correcoes = Correcao.objects.filter(
+            corretor=request.user, 
+            redacao__status__in=['CORRIGIDA', 'EM_QA']
+        ).select_related('redacao', 'redacao__tema').order_by('-redacao__data_envio')
+        
+        dados = []
+        for c in correcoes:
+            r = c.redacao
+            dados.append({
+                "id": r.id,
+                "tema_titulo": r.tema.titulo if r.tema else "Sem tema",
+                "tema_tipo": r.tema.tipo if r.tema else "ENEM",
+                "data_envio": r.data_envio,
+                "nota_final": c.nota_final,
+            })
+        return Response(dados, status=200)
 
 class IniciarCorrecaoView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCorretor]
     def post(self, request, pk):
         redacao = get_object_or_404(Redacao, pk=pk)
-        if redacao.status == 'EM_CORRECAO' and redacao.corretor_atual and redacao.corretor_atual != request.user:
+        if redacao.status in ['EM_CORRECAO', 'REFAZER'] and redacao.corretor_atual and redacao.corretor_atual != request.user:
             return Response({"erro": "Já está com outro corretor."}, status=status.HTTP_409_CONFLICT)
+        
         redacao.corretor_atual = request.user
-        redacao.status = 'EM_CORRECAO'
+        if redacao.status != 'REFAZER':
+            redacao.status = 'EM_CORRECAO'
+            
         redacao.data_inicio_correcao = timezone.now()
         redacao.save()
         config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
@@ -392,17 +532,29 @@ class LiberarCorrecaoView(APIView):
 
 class EntregarCorrecaoView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCorretor]
+    
     def post(self, request):
         try:
             data = request.data
             redacao = get_object_or_404(Redacao, pk=data.get('redacao_id'))
             if redacao.corretor_atual != request.user: return Response({"erro": "Negado."}, status=403)
 
+            from django.db import transaction
             with transaction.atomic():
-                correcao = Correcao.objects.create(
-                    redacao=redacao, corretor=request.user,
-                    nota_final=data.get('nota_final'), comentario_geral=data.get('comentario_geral', '')
-                )
+                is_refacao = hasattr(redacao, 'correcao')
+
+                if is_refacao:
+                    correcao = redacao.correcao
+                    correcao.nota_final = data.get('nota_final')
+                    import re
+                    novo_coment = re.sub(r'\[ALERTA_COORDENACAO\][\s\S]*?\[/ALERTA_COORDENACAO\]\n?', '', correcao.comentario_geral)
+                    correcao.comentario_geral = novo_coment
+                    correcao.save()
+                    NotaCompetencia.objects.filter(correcao=correcao).delete()
+                    Anotacao.objects.filter(correcao=correcao).delete()
+                else:
+                    correcao = Correcao.objects.create(redacao=redacao, corretor=request.user, nota_final=data.get('nota_final'), comentario_geral='')
+                    
                 notas = data.get('notas', {})
                 coments = data.get('comentarios', {})
                 for i in range(1, 6):
@@ -412,26 +564,28 @@ class EntregarCorrecaoView(APIView):
                 for an in data.get('anotacoes', []):
                     Anotacao.objects.create(correcao=correcao, competencia=an.get('competencia'), x=an.get('x'), y=an.get('y'), width=an.get('width'), height=an.get('height'), tipo_erro=an.get('tipo_erro', 'Erro'), texto=an.get('texto', ''))
                 
-                redacao.status = 'CORRIGIDA'
+                if not is_refacao and random.randint(1, 100) <= 5:
+                    redacao.status = 'EM_QA' 
+                else:
+                    redacao.status = 'CORRIGIDA' 
+                    
                 redacao.data_inicio_correcao = None
                 redacao.save()
 
-                config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
-                tipo_tema = redacao.tema.tipo if redacao.tema else 'ENEM'
-                valor_base = config.valor_pagamento_simples if tipo_tema == 'SIMPLES' else config.valor_pagamento_enem
+                if not is_refacao:
+                    config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
+                    tipo_tema = redacao.tema.tipo if redacao.tema else 'ENEM'
+                    valor_base = config.valor_pagamento_simples if tipo_tema == 'SIMPLES' else config.valor_pagamento_enem
+                    carteira, _ = Carteira.objects.get_or_create(corretor=request.user)
+                    if redacao.is_urgente or getattr(redacao, 'vip_pago', False):
+                        carteira.qtd_vip_pendente += 1
+                        carteira.saldo_atual += (valor_base + config.valor_bonus_vip)
+                    else:
+                        carteira.qtd_normal_pendente += 1
+                        carteira.saldo_atual += valor_base
+                    carteira.save()                
                 
-                carteira, _ = Carteira.objects.get_or_create(corretor=request.user)
-                
-                if redacao.is_urgente or getattr(redacao, 'vip_pago', False):
-                    carteira.qtd_vip_pendente += 1
-                    carteira.saldo_atual += (valor_base + config.valor_bonus_vip)
-                else:
-                    carteira.qtd_normal_pendente += 1
-                    carteira.saldo_atual += valor_base
-                    
-                carteira.save()                
-                
-            return Response({"mensagem": "Salva e Dinheiro Creditado!"}, status=200)
+            return Response({"mensagem": "Salva!"}, status=200)
         except Exception as e:
             return Response({"erro": str(e)}, status=400)
         
@@ -452,6 +606,22 @@ class GestaoRedacoesView(generics.ListAPIView):
     serializer_class = RedacaoSerializer 
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     queryset = Redacao.objects.all().order_by('-data_envio')
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        data = serializer.data
+        
+        corretores_ids = [d['corretor_atual'] for d in data if d.get('corretor_atual')]
+        corretores_map = {u.id: f"{u.first_name} {u.last_name}".strip() or u.username for u in User.objects.filter(id__in=corretores_ids)}
+        
+        for item in data:
+            if item.get('corretor_atual'):
+                item['corretor_nome'] = corretores_map.get(item['corretor_atual'])
+            else:
+                item['corretor_nome'] = None
+                
+        return Response(data)
 
 class ToggleUrgenciaView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
@@ -467,6 +637,29 @@ class ForcarLiberacaoView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     def post(self, request, pk):
         redacao = get_object_or_404(Redacao, pk=pk)
+        
+        if redacao.status == 'REFAZER' and redacao.corretor_atual:
+            correcao = getattr(redacao, 'correcao', None)
+            if correcao:
+                corretor_anterior = redacao.corretor_atual
+                config = ConfiguracaoSistema.objects.first()
+                tipo_tema = redacao.tema.tipo if redacao.tema else 'ENEM'
+                valor_base = config.valor_pagamento_simples if tipo_tema == 'SIMPLES' else config.valor_pagamento_enem
+                
+                carteira = Carteira.objects.filter(corretor=corretor_anterior).first()
+                if carteira:
+                    if redacao.is_urgente or getattr(redacao, 'vip_pago', False):
+                        carteira.qtd_vip_pendente = max(0, carteira.qtd_vip_pendente - 1)
+                        carteira.saldo_atual = max(0, float(carteira.saldo_atual) - float(valor_base + config.valor_bonus_vip))
+                    else:
+                        carteira.qtd_normal_pendente = max(0, carteira.qtd_normal_pendente - 1)
+                        carteira.saldo_atual = max(0, float(carteira.saldo_atual) - float(valor_base))
+                    carteira.save()
+                
+                correcao.delete()
+            
+            redacao.is_urgente = True 
+        
         redacao.corretor_atual = None
         redacao.status = 'AGUARDANDO'
         redacao.data_inicio_correcao = None
@@ -487,12 +680,6 @@ class ConfiguracaoView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=400)
-
-class GestaoUsuariosViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all().order_by('-date_joined')
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
-    parser_classes = [MultiPartParser, FormParser, JSONParser] 
 
 class PacoteViewSet(viewsets.ModelViewSet):
     serializer_class = PacoteSerializer
@@ -718,17 +905,14 @@ class ReportarProblemaView(APIView):
             redacao = Redacao.objects.get(pk=pk)
             motivo = request.data.get('motivo', 'Outros')
             obs = request.data.get('observacao', '')
+            
             redacao.status = 'AUDITORIA'
-            correcao = Correcao.objects.filter(redacao=redacao).first()
-            
-            if correcao:
-                correcao.comentario_geral = f"[SINALIZADO: {motivo}]\nDetalhes do Professor: {obs}"
-                correcao.save()
-            else:
-                Correcao.objects.create(redacao=redacao, corretor=request.user, nota_final=0, comentario_geral=f"[SINALIZADO: {motivo}]\nDetalhes do Professor: {obs}")
-            
-            redacao.corretor_atual = None
             redacao.save()
+            
+            correcao, _ = Correcao.objects.get_or_create(redacao=redacao, corretor=request.user, defaults={'nota_final': 0})
+            correcao.comentario_geral = f"[SINALIZADO: {motivo}]\nDetalhes do Professor: {obs}"
+            correcao.save()
+
             return Response({"mensagem": "Redação enviada para a coordenação com sucesso."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"erro": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -737,38 +921,50 @@ class ResolverAuditoriaView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
-        if not request.user.is_staff: return Response({"erro": "Acesso negado."}, status=status.HTTP_403_FORBIDDEN)
+        if not request.user.is_staff: 
+            return Response({"erro": "Acesso negado."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             redacao = Redacao.objects.get(pk=pk)
             acao = request.data.get('acao') 
-            mensagem_aluno = request.data.get('mensagem', '')
+            mensagem = request.data.get('mensagem', '')
 
             if acao == 'DEVOLVER_ALUNO':
                 redacao.status = 'DEVOLVIDA'
                 redacao.save()
-                
                 correcao = Correcao.objects.filter(redacao=redacao).first()
                 if correcao:
-                    correcao.comentario_geral = mensagem_aluno
+                    correcao.comentario_geral = mensagem
                     correcao.save()
                 
                 carteira = CarteiraAluno.objects.get(aluno=redacao.aluno)
-                if redacao.vip_pago: carteira.saldo_vip += 1
+                if getattr(redacao, 'vip_pago', False): carteira.saldo_vip += 1
                 else: carteira.saldo_simples += 1
                 carteira.save()
 
             elif acao == 'VOLTAR_FILA':
-                redacao.status = 'AGUARDANDO'
-                redacao.corretor_atual = None
+                redacao.status = 'REFAZER' 
                 redacao.save()
-                Correcao.objects.filter(redacao=redacao).delete()
+                correcao = Correcao.objects.filter(redacao=redacao).first()
+                if not correcao:
+                    correcao = Correcao.objects.create(redacao=redacao, corretor=redacao.corretor_atual, nota_final=0, comentario_geral='')
+                
+                correcao.comentario_geral = f"[ALERTA_COORDENACAO]\nFALSO POSITIVO: {mensagem}\n[/ALERTA_COORDENACAO]\n{correcao.comentario_geral}"
+                correcao.save()
+
+            elif acao == 'EXIGIR_REFACAO':
+                redacao.status = 'REFAZER'
+                redacao.save()
+                correcao = Correcao.objects.filter(redacao=redacao).first()
+                if correcao:
+                    correcao.comentario_geral = f"[ALERTA_COORDENACAO]\nREFAÇÃO EXIGIDA (QA): {mensagem}\n[/ALERTA_COORDENACAO]\n{correcao.comentario_geral}"
+                    correcao.save()
                 
             return Response({"mensagem": "Auditoria resolvida com sucesso."}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"erro": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 class MaterialApoioViewSet(viewsets.ModelViewSet):
     serializer_class = MaterialApoioSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -1098,7 +1294,6 @@ class GestaoFinanceiraView(APIView):
                     nome_completo = f"{prof.first_name or ''} {prof.last_name or ''}".strip()
                     if not nome_completo: nome_completo = prof.username
                     
-                    # --- BUSCA A SOLICITAÇÃO ATIVA E O PDF ---
                     pendente = PagamentoCorretor.objects.filter(
                         corretor=prof,
                         status__in=['AGUARDANDO_RECIBO', 'EM_ANALISE', 'RECUSADO']
@@ -1118,7 +1313,6 @@ class GestaoFinanceiraView(APIView):
                         'qtd_normal': getattr(carteira, 'qtd_normal_pendente', 0),
                         'qtd_vip': getattr(carteira, 'qtd_vip_pendente', 0),
                         
-                        # DADOS DO NOVO FLUXO RPA
                         'pagamento_id': pendente.id if pendente else None,
                         'status_pagamento': pendente.status if pendente else None,
                         'arquivo_recibo_url': pendente.arquivo_recibo.url if pendente and pendente.arquivo_recibo else None,
@@ -1134,12 +1328,13 @@ class GestaoFinanceiraView(APIView):
                     'id': p.id,
                     'corretor_nome': nome_completo,
                     'email': p.corretor.email,
-                    'data': p.data_pagamento or p.data_solicitacao,
+                    'data_solicitacao': p.data_solicitacao, 
+                    'data_pagamento': p.data_pagamento,
                     'valor': float(p.valor),
                     'qtd_normal': p.qtd_normal,
                     'qtd_vip': p.qtd_vip,
-                    'status': p.status, # <-- ADICIONADO PARA FILTRAR
-                    'arquivo_recibo_url': p.arquivo_recibo.url if p.arquivo_recibo else None # <-- PARA VER O PDF
+                    'status': p.status, 
+                    'arquivo_recibo_url': p.arquivo_recibo.url if p.arquivo_recibo else None 
                 })
 
             return Response({
@@ -1275,6 +1470,11 @@ class SolicitarSaqueView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        
+        tem_pendencia = Redacao.objects.filter(status='REFAZER', corretor_atual=request.user).exists()
+        if tem_pendencia:
+            return Response({"erro": "Você possui redações pendentes em REFAÇÃO. Corrija-as antes de solicitar o saque."}, status=400)
+
         carteira, _ = Carteira.objects.get_or_create(corretor=request.user)
         
         if carteira.saldo_atual <= 0:
@@ -1337,9 +1537,9 @@ class BaixarPagamentoView(APIView):
 
         carteira = Carteira.objects.filter(corretor=pagamento.corretor).first()
         if carteira:
-            carteira.saldo_atual = max(0, carteira.saldo_atual - pagamento.valor)
-            carteira.qtd_normal_pendente = 0
-            carteira.qtd_vip_pendente = 0
+            carteira.saldo_atual = max(0, float(carteira.saldo_atual) - float(pagamento.valor))
+            carteira.qtd_normal_pendente = max(0, carteira.qtd_normal_pendente - pagamento.qtd_normal)
+            carteira.qtd_vip_pendente = max(0, carteira.qtd_vip_pendente - pagamento.qtd_vip)
             carteira.saque_solicitado = False
             carteira.save()
 
@@ -1357,3 +1557,39 @@ class RecusarReciboView(APIView):
         pagamento.save()
 
         return Response({"mensagem": "Recibo recusado. O corretor foi notificado para reenvio."}, status=200)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def enviar_avaliacao_corretor(request, pk):
+    try:
+        redacao = Redacao.objects.get(pk=pk, aluno=request.user)
+        if hasattr(redacao, 'correcao') and redacao.correcao:
+            redacao.correcao.avaliacao_aluno = request.data.get('nota', 0)
+            redacao.correcao.comentario_avaliacao = request.data.get('comentario', '')
+            redacao.correcao.save()
+            return Response({'sucesso': True})
+        return Response({'erro': 'Correção não encontrada.'}, status=400)
+    except Exception as e:
+        return Response({'erro': str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def solicitar_recurso_redacao(request, pk):
+    try:
+        redacao = Redacao.objects.get(pk=pk, aluno=request.user)
+        motivo = request.data.get('motivo', '')
+        
+        redacao.status = 'AUDITORIA' 
+        
+        if hasattr(redacao, 'correcao') and redacao.correcao:
+            aviso_recurso = f"\n\n--- RECURSO SOLICITADO PELO ALUNO ---\nMotivo: {motivo}"
+            if redacao.correcao.comentario_geral:
+                redacao.correcao.comentario_geral += aviso_recurso
+            else:
+                redacao.correcao.comentario_geral = aviso_recurso
+            redacao.correcao.save()
+            
+        redacao.save()
+        return Response({'sucesso': True})
+    except Exception as e:
+        return Response({'erro': str(e)}, status=500)

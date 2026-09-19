@@ -32,45 +32,39 @@ const GestaoFinanceira = () => {
   const [cnpj, setCnpj] = useState('');
   const [salvandoConfig, setSalvandoConfig] = useState(false);
 
+  // GUARDAMOS AS TAXAS EM MEMÓRIA PARA O CÁLCULO DO RECIBO
+  const [taxasPlataforma, setTaxasPlataforma] = useState({ enem: 4.00, simples: 3.00, vip: 1.50 });
+
   const modalAnalise = useDisclosure();
   const [pagamentoEmAnalise, setPagamentoEmAnalise] = useState(null);
   const [motivoRecusa, setMotivoRecusa] = useState('');
   const [recusando, setRecusando] = useState(false);
 
-  // Filtros de Auditoria
+  const modalRecibo = useDisclosure();
+  const [reciboVisualizar, setReciboVisualizar] = useState(null);
+
   const [filtroDataAuditoria, setFiltroDataAuditoria] = useState('MES_ATUAL');
   const [dtInicioAuditoria, setDtInicioAuditoria] = useState('');
   const [dtFimAuditoria, setDtFimAuditoria] = useState('');
 
-  const carregarDados = async (silencioso = false) => {
-    try {
-      if (!silencioso) setLoading(true);
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://127.0.0.1:8000/api/gestao/financeiro/dashboard/', { headers: { Authorization: `Bearer ${token}` } });
-      setDados(res.data);
-    } catch (error) {
-      if (!silencioso) toast({ title: 'Erro ao carregar dados financeiros', status: 'error' });
-    } finally {
-      if (!silencioso) setLoading(false);
-    }
-  };
+  const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
-  // --- ATUALIZAÇÃO AUTOMÁTICA ---
-  useEffect(() => { 
-      carregarDados(); 
-      const interval = setInterval(() => { carregarDados(true); }, 10000);
-      return () => clearInterval(interval);
-  }, []);
+  const aplicarMascaraCNPJ = (valor) => {
+    let v = valor.replace(/\D/g, ''); 
+    if (v.length > 14) v = v.substring(0, 14); 
+    v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+    v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+    v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+    v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    return v;
+  };
 
   const aplicarFiltroData = (itemData, filtro, inicio, fim) => {
       if (!itemData) return false;
       const dataItem = new Date(itemData);
       const hoje = new Date();
       if (filtro === 'MES_ATUAL') { return dataItem.getMonth() === hoje.getMonth() && dataItem.getFullYear() === hoje.getFullYear(); }
-      if (filtro === 'MES_ANTERIOR') {
-          const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-          return dataItem.getMonth() === mesAnterior.getMonth() && dataItem.getFullYear() === mesAnterior.getFullYear();
-      }
+      if (filtro === 'MES_ANTERIOR') { const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1); return dataItem.getMonth() === mesAnterior.getMonth() && dataItem.getFullYear() === mesAnterior.getFullYear(); }
       if (filtro === 'PERIODO') {
           if (!inicio && !fim) return true;
           const dInicio = inicio ? new Date(inicio) : new Date('2000-01-01');
@@ -90,20 +84,41 @@ const GestaoFinanceira = () => {
               <option value="MES_ANTERIOR">Mês Anterior</option>
               <option value="PERIODO">Período Específico</option>
           </Select>
-          {filtro === 'PERIODO' && (
-              <HStack>
-                  <Input type="date" bg="gray.50" size="sm" value={dtInicio} onChange={e => setDtInicio(e.target.value)} />
-                  <Text fontSize="sm" color="gray.500">até</Text>
-                  <Input type="date" bg="gray.50" size="sm" value={dtFim} onChange={e => setDtFim(e.target.value)} />
-              </HStack>
-          )}
+          {filtro === 'PERIODO' && (<HStack><Input type="date" bg="gray.50" size="sm" value={dtInicio} onChange={e => setDtInicio(e.target.value)} /><Text fontSize="sm" color="gray.500">até</Text><Input type="date" bg="gray.50" size="sm" value={dtFim} onChange={e => setDtFim(e.target.value)} /></HStack>)}
           <Divider orientation="vertical" h="30px" display={{ base: 'none', md: 'block' }} mx={2} />
-          <InputGroup size="sm" maxW="300px" flex={1}>
-              <InputLeftElement pointerEvents='none'><SearchIcon color='gray.400' /></InputLeftElement>
-              <Input placeholder="Filtrar por nome ou e-mail..." value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} bg="gray.50" />
-          </InputGroup>
+          <InputGroup size="sm" maxW="300px" flex={1}><InputLeftElement pointerEvents='none'><SearchIcon color='gray.400' /></InputLeftElement><Input placeholder="Filtrar por nome ou e-mail..." value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} bg="gray.50" /></InputGroup>
       </Flex>
   );
+
+  const carregarDados = async (silencioso = false) => {
+    try {
+      if (!silencioso) setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.get('http://127.0.0.1:8000/api/gestao/financeiro/dashboard/', { headers: { Authorization: `Bearer ${token}` } });
+      setDados(res.data);
+      
+      // Carrega as taxas de pagamento em background para fazermos os cálculos locais
+      try {
+          const cfgRes = await axios.get('http://127.0.0.1:8000/api/gestao/configuracoes/', { headers: { Authorization: `Bearer ${token}` } });
+          setTaxasPlataforma({
+              enem: parseFloat(cfgRes.data.valor_pagamento_enem) || 4.00,
+              simples: parseFloat(cfgRes.data.valor_pagamento_simples) || 3.00,
+              vip: parseFloat(cfgRes.data.valor_bonus_vip) || 1.50
+          });
+      } catch(e) {}
+
+    } catch (error) {
+      if (!silencioso) toast({ title: 'Erro ao carregar dados financeiros', status: 'error' });
+    } finally {
+      if (!silencioso) setLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+      carregarDados(); 
+      const interval = setInterval(() => { carregarDados(true); }, 10000);
+      return () => clearInterval(interval);
+  }, []);
 
   const abrirAnalise = (pagamento) => { setPagamentoEmAnalise(pagamento); setMotivoRecusa(''); setRecusando(false); modalAnalise.onOpen(); };
 
@@ -112,13 +127,13 @@ const GestaoFinanceira = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.post(`http://127.0.0.1:8000/api/gestao/financeiro/baixar-pagamento/${pagamentoEmAnalise.pagamento_id}/`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      toast({ title: 'Pagamento Finalizado!', description: `A carteira foi zerada e o recibo arquivado.`, status: 'success' });
+      toast({ title: 'Pagamento Finalizado!', description: `A carteira foi subtraída e o recibo arquivado.`, status: 'success' });
       carregarDados();
     } catch (error) { toast({ title: 'Erro ao baixar pagamento', status: 'error' }); } finally { setProcessandoId(null); modalAnalise.onClose(); }
   };
 
   const recusarReciboReal = async () => {
-      if(!motivoRecusa.trim()) return toast({ title: 'Atenção', description: 'Escreva o motivo da recusa.', status: 'warning' });
+      if(!motivoRecusa.trim()) { return toast({ title: 'Atenção', description: 'Escreva o motivo da recusa.', status: 'warning' }); }
       setProcessandoId(pagamentoEmAnalise.pagamento_id);
       try {
         const token = localStorage.getItem('token');
@@ -135,7 +150,7 @@ const GestaoFinanceira = () => {
         setConfigCompleta(res.data);
         setTempoEnem(res.data.tempo_limite_enem_minutos); setTempoSimples(res.data.tempo_limite_simples_minutos);
         setValorEnem(res.data.valor_pagamento_enem); setValorSimples(res.data.valor_pagamento_simples); setValorVIP(res.data.valor_bonus_vip);
-        setRazaoSocial(res.data.razao_social_plataforma || ''); setCnpj(res.data.cnpj_plataforma || '');
+        setRazaoSocial(res.data.razao_social_plataforma || ''); setCnpj(aplicarMascaraCNPJ(res.data.cnpj_plataforma || ''));
         modalConfig.onOpen();
     } catch (e) { toast({ title: 'Erro ao carregar', status: 'error' }); }
   };
@@ -144,29 +159,100 @@ const GestaoFinanceira = () => {
       setSalvandoConfig(true);
       try {
           const token = localStorage.getItem('token');
-          const payload = { ...configCompleta, tempo_limite_enem_minutos: tempoEnem, tempo_limite_simples_minutos: tempoSimples, valor_pagamento_enem: valorEnem, valor_pagamento_simples: valorSimples, valor_bonus_vip: valorVIP, razao_social_plataforma: razaoSocial, cnpj_plataforma: cnpj };
+          const payload = { 
+            ...configCompleta, tempo_limite_enem_minutos: tempoEnem, tempo_limite_simples_minutos: tempoSimples, 
+            valor_pagamento_enem: valorEnem, valor_pagamento_simples: valorSimples, valor_bonus_vip: valorVIP, 
+            razao_social_plataforma: razaoSocial, cnpj_plataforma: cnpj 
+          };
           await axios.put('http://127.0.0.1:8000/api/gestao/configuracoes/', payload, { headers: { Authorization: `Bearer ${token}` } });
           toast({ title: "Atualizado com sucesso!", status: "success" }); modalConfig.onClose(); carregarDados(); 
       } catch (e) { toast({ title: 'Erro ao salvar', status: 'error' }); }
       setSalvandoConfig(false);
   };
 
-  if (loading) return <Flex w="full" h="100vh" align="center" justify="center"><Spinner size="xl" color="teal.500" thickness="4px" /></Flex>;
+  // ==============================================================================
+  // A MÁGICA DE CÁLCULO DAS REDAÇÕES NO FRONTEND
+  // ==============================================================================
+  const abrirModalRedacoes = async (reciboItem) => {
+    setReciboVisualizar({ ...reciboItem, loading: true });
+    modalRecibo.onOpen();
 
-  const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+    try {
+        const token = localStorage.getItem('token');
+        // Usamos a lista geral de redações para pescar as deste professor
+        const res = await axios.get('http://127.0.0.1:8000/api/gestao/redacoes/', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const todasRedacoes = res.data;
+        const dataReferencia = new Date(reciboItem.data_solicitacao || reciboItem.data_pagamento || reciboItem.data);
+
+        // Filtra as redações que ele corrigiu antes desse pagamento
+        let redaDoProfessor = todasRedacoes.filter(r => 
+            r.corretor_nome === reciboItem.corretor_nome &&
+            ['CORRIGIDA', 'EM_QA', 'FINALIZADA'].includes(r.status) &&
+            new Date(r.data_envio) <= dataReferencia
+        );
+
+        // Puxa as mais antigas primeiro (Primeiras a entrar = Primeiras a serem pagas)
+        redaDoProfessor.sort((a, b) => new Date(a.data_envio).getTime() - new Date(b.data_envio).getTime());
+
+        let normaisAContar = reciboItem.qtd_normal || 0;
+        let vipsAContar = reciboItem.qtd_vip || 0;
+        let redaFinais = [];
+
+        // Monta o detalhe da tabela com a quantidade cobrada no recibo
+        for (let r of redaDoProfessor) {
+            if (normaisAContar === 0 && vipsAContar === 0) break;
+
+            const isVip = r.is_urgente || r.vip_pago;
+            const tipo = r.tema_tipo || r.tipo || 'ENEM';
+            const base = tipo.toUpperCase() === 'SIMPLES' ? taxasPlataforma.simples : taxasPlataforma.enem;
+            const bonus = isVip ? taxasPlataforma.vip : 0;
+
+            let descricao = `Correção ${tipo} (#${r.id})`;
+            if (bonus > 0) descricao += " + Bônus Especial";
+
+            if (isVip && vipsAContar > 0) {
+                redaFinais.push({ id: r.id, data: r.data_envio, descricao, valor: base + bonus });
+                vipsAContar--;
+            } else if (!isVip && normaisAContar > 0) {
+                redaFinais.push({ id: r.id, data: r.data_envio, descricao, valor: base + bonus });
+                normaisAContar--;
+            }
+        }
+
+        // Mostra na tabela da mais recente para a mais antiga
+        redaFinais.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+        setReciboVisualizar({ ...reciboItem, redacoes: redaFinais, loading: false });
+
+    } catch (e) {
+        setReciboVisualizar({ ...reciboItem, redacoes: [], loading: false });
+        toast({ title: "Erro de Conexão", description: "Não conseguimos extrair o extrato detalhado.", status: "error" });
+    }
+  };
+
+  if (loading) return <Flex w="full" h="100vh" align="center" justify="center"><Spinner size="xl" color="teal.500" thickness="4px" /></Flex>;
 
   const historicoAuditoriaFiltrado = dados?.historico_pagamentos?.filter(p => {
       const matchBusca = p.corretor_nome.toLowerCase().includes(buscaHistorico.toLowerCase()) || p.email.toLowerCase().includes(buscaHistorico.toLowerCase());
-      const matchData = aplicarFiltroData(p.data, filtroDataAuditoria, dtInicioAuditoria, dtFimAuditoria);
+      const matchData = aplicarFiltroData(p.data_pagamento || p.data, filtroDataAuditoria, dtInicioAuditoria, dtFimAuditoria);
       const matchStatus = p.status === 'PAGO'; 
       return matchBusca && matchData && matchStatus;
   }) || [];
 
   return (
     <Container maxW="container.xl" py={8} px={{ base: 4, md: 8 }}>
+      
       <Flex justify="space-between" align="center" mb={6} wrap="wrap" gap={4}>
-        <Box><Heading color="gray.800" mb={1}>Painel Financeiro 📊</Heading><Text color="gray.500">Acompanhe o faturamento da plataforma e faça a gestão financeira.</Text></Box>
-        <Button leftIcon={<SettingsIcon />} colorScheme="teal" variant="outline" onClick={abrirConfiguracoes} shadow="sm">Configurações da Plataforma</Button>
+        <Box>
+          <Heading color="gray.800" mb={1}>Painel Financeiro 📊</Heading>
+          <Text color="gray.500">Acompanhe o faturamento da plataforma e faça a gestão financeira.</Text>
+        </Box>
+        <Button leftIcon={<SettingsIcon />} colorScheme="teal" variant="outline" onClick={abrirConfiguracoes} shadow="sm">
+          Configurações da Plataforma
+        </Button>
       </Flex>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3, xl: 5 }} spacing={6} mb={10}>
@@ -215,9 +301,7 @@ const GestaoFinanceira = () => {
                       </Tbody>
                     </Table>
                   ) : (
-                    <Flex direction="column" align="center" justify="center" p={10} bg="gray.50">
-                      <CheckCircleIcon boxSize={10} color="green.400" mb={4} /><Heading size="sm" color="gray.600" mb={1}>Tudo em dia!</Heading><Text color="gray.500" fontSize="sm">Não há nenhum pagamento pendente para os professores neste momento.</Text>
-                    </Flex>
+                    <Flex direction="column" align="center" justify="center" p={10} bg="gray.50"><CheckCircleIcon boxSize={10} color="green.400" mb={4} /><Heading size="sm" color="gray.600" mb={1}>Tudo em dia!</Heading><Text color="gray.500" fontSize="sm">Não há nenhum pagamento pendente para os professores neste momento.</Text></Flex>
                   )}
                 </Box>
               </Card>
@@ -229,30 +313,35 @@ const GestaoFinanceira = () => {
               <Card shadow="sm" borderRadius="xl" border="1px solid" borderColor="gray.200" overflow="hidden" bg="white">
                 <Box overflowX="auto">
                   <Table variant="simple">
-                    <Thead bg="gray.50">
-                      <Tr><Th py={4}>Data do Pagamento</Th><Th>Corretor</Th><Th textAlign="center">Redações Quitadas</Th><Th isNumeric>Valor Pago</Th><Th textAlign="center">Recibo</Th></Tr>
-                    </Thead>
+                    <Thead bg="gray.50"><Tr><Th py={4}>Solicitação</Th><Th>Pagamento</Th><Th>Corretor</Th><Th textAlign="center">Redações Quitadas</Th><Th isNumeric>Valor Pago</Th><Th textAlign="center">Recibo</Th></Tr></Thead>
                     <Tbody>
                       {historicoAuditoriaFiltrado.map((item) => (
                         <Tr key={item.id} _hover={{ bg: "gray.50" }}>
-                          <Td fontWeight="bold" color="gray.600">{new Date(item.data).toLocaleDateString('pt-BR')} às {new Date(item.data).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</Td>
+                          <Td>
+                            <Text fontSize="sm" fontWeight="bold" color="gray.700">{item.data_solicitacao ? new Date(item.data_solicitacao).toLocaleDateString('pt-BR') : 'N/A'}</Text>
+                            {item.data_solicitacao && (<Text fontSize="xs" color="gray.500">{new Date(item.data_solicitacao).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</Text>)}
+                          </Td>
+                          <Td>
+                            <Text fontSize="sm" fontWeight="bold" color="green.600">{item.data_pagamento ? new Date(item.data_pagamento).toLocaleDateString('pt-BR') : new Date(item.data).toLocaleDateString('pt-BR')}</Text>
+                            <Text fontSize="xs" color="gray.500">{item.data_pagamento ? new Date(item.data_pagamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : new Date(item.data).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</Text>
+                          </Td>
                           <Td><Text fontWeight="bold" color="gray.800">{item.corretor_nome}</Text><Text fontSize="xs" color="gray.500">{item.email}</Text></Td>
                           <Td textAlign="center"><Badge colorScheme="blue" mr={1}>{item.qtd_normal} Normais</Badge><Badge colorScheme="purple">{item.qtd_vip} VIPs</Badge></Td>
                           <Td isNumeric fontWeight="bold" color="green.600">{formatarMoeda(item.valor)}</Td>
                           <Td textAlign="center">
-                              {item.arquivo_recibo_url ? (
-                                  <Button size="sm" colorScheme="teal" variant="outline" leftIcon={<ViewIcon />} as="a" href={`http://127.0.0.1:8000${item.arquivo_recibo_url}`} target="_blank">
-                                      Ver Arquivo
-                                  </Button>
-                              ) : (
-                                  <Text fontSize="xs" color="gray.400" fontStyle="italic">Antigo/S.Arq</Text>
-                              )}
+                              <HStack spacing={2} justify="center">
+                                  {/* BOTÃO CHAMA A NOVA FUNÇÃO DE AUTO-CÁLCULO */}
+                                  <Button size="sm" colorScheme="blue" variant="solid" leftIcon={<ViewIcon />} onClick={() => abrirModalRedacoes(item)}>Ver Redações</Button>
+                                  {item.arquivo_recibo_url ? (
+                                      <Button size="sm" colorScheme="teal" variant="outline" leftIcon={<DownloadIcon />} as="a" href={`http://127.0.0.1:8000${item.arquivo_recibo_url}`} target="_blank">PDF</Button>
+                                  ) : (
+                                      <Text fontSize="xs" color="gray.400" fontStyle="italic">Antigo/S.Arq</Text>
+                                  )}
+                              </HStack>
                           </Td>
                         </Tr>
                       ))}
-                      {historicoAuditoriaFiltrado.length === 0 && (
-                        <Tr><Td colSpan={5} textAlign="center" py={8} color="gray.500">Nenhum registo de pagamento finalizado encontrado para este filtro.</Td></Tr>
-                      )}
+                      {historicoAuditoriaFiltrado.length === 0 && (<Tr><Td colSpan={6} textAlign="center" py={8} color="gray.500">Nenhum registo de pagamento finalizado encontrado para este filtro.</Td></Tr>)}
                     </Tbody>
                   </Table>
                 </Box>
@@ -279,9 +368,7 @@ const GestaoFinanceira = () => {
                               <Box><Text fontSize="xs" fontWeight="bold" color="gray.500">CONTA BANCÁRIA ({pagamentoEmAnalise?.banco})</Text><Text fontWeight="bold" color="gray.800">{pagamentoEmAnalise?.agencia_conta}</Text></Box>
                           )}
                       </Box>
-                      <Button as="a" href={pagamentoEmAnalise?.arquivo_recibo_url ? `http://127.0.0.1:8000${pagamentoEmAnalise.arquivo_recibo_url}` : '#'} target="_blank" size="lg" colorScheme="blue" variant="outline" leftIcon={<ViewIcon />} w="full">
-                          Ver PDF do Recibo Assinado
-                      </Button>
+                      <Button as="a" href={pagamentoEmAnalise?.arquivo_recibo_url ? `http://127.0.0.1:8000${pagamentoEmAnalise.arquivo_recibo_url}` : '#'} target="_blank" size="lg" colorScheme="blue" variant="outline" leftIcon={<ViewIcon />} w="full">Ver PDF do Recibo Assinado</Button>
                       {recusando ? (
                           <Box bg="red.50" p={4} borderRadius="md" border="1px solid" borderColor="red.200">
                               <FormLabel fontSize="sm" fontWeight="bold" color="red.700">Qual o problema com o recibo?</FormLabel>
@@ -299,6 +386,42 @@ const GestaoFinanceira = () => {
           </ModalContent>
       </Modal>
 
+      {/* O NOVO MODAL INTELIGENTE DO FINANCEIRO COM CARREGAMENTO */}
+      <Modal isOpen={modalRecibo.isOpen} onClose={modalRecibo.onClose} isCentered size="2xl" scrollBehavior="inside">
+        <ModalOverlay backdropFilter="blur(3px)" />
+        <ModalContent borderRadius="xl">
+          <ModalHeader bg="teal.600" color="white" borderTopRadius="xl">Redações Pagas neste Recibo</ModalHeader>
+          <ModalCloseButton color="white" mt={1} />
+          <ModalBody py={6}>
+            {reciboVisualizar?.loading ? (
+                <Flex justify="center" align="center" py={10} direction="column" gap={4}>
+                    <Spinner size="xl" color="teal.500" thickness="4px" />
+                    <Text color="gray.500" fontWeight="bold">Calculando redações do recibo...</Text>
+                </Flex>
+            ) : reciboVisualizar && (
+              <>
+                <Flex justify="space-between" mb={4} p={3} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.200" wrap="wrap" gap={3}>
+                  <Text fontWeight="bold" color="gray.600">Data do Pagamento: {new Date(reciboVisualizar.data_pagamento || reciboVisualizar.data_solicitacao).toLocaleDateString('pt-BR')}</Text>
+                  <Text fontWeight="bold" color="green.600">Valor Total: {formatarMoeda(reciboVisualizar.valor)}</Text>
+                </Flex>
+                <Table variant="simple" size="sm">
+                  <Thead bg="gray.100"><Tr><Th>Data da Correção</Th><Th>Descrição</Th><Th isNumeric>Valor</Th></Tr></Thead>
+                  <Tbody>
+                    {reciboVisualizar.redacoes && reciboVisualizar.redacoes.map((t, index) => (
+                      <Tr key={index}><Td>{new Date(t.data).toLocaleString('pt-BR')}</Td><Td fontWeight="medium">{t.descricao}</Td><Td isNumeric fontWeight="bold" color="green.500">{formatarMoeda(t.valor)}</Td></Tr>
+                    ))}
+                    {(!reciboVisualizar.redacoes || reciboVisualizar.redacoes.length === 0) && (
+                      <Tr><Td colSpan={3} textAlign="center" py={6} color="gray.500">Nenhuma redação antiga pôde ser resgatada deste recibo.</Td></Tr>
+                    )}
+                  </Tbody>
+                </Table>
+              </>
+            )}
+          </ModalBody>
+          <ModalFooter bg="gray.50" borderBottomRadius="xl"><Button colorScheme="teal" onClick={modalRecibo.onClose}>Fechar</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
       <Modal isOpen={modalConfig.isOpen} onClose={modalConfig.onClose} isCentered size="xl">
         <ModalOverlay backdropFilter="blur(3px)" />
         <ModalContent borderRadius="xl" overflow="hidden">
@@ -309,17 +432,12 @@ const GestaoFinanceira = () => {
                     <Box mb={2}>
                         <Text fontWeight="bold" color="gray.700" fontSize="sm" mb={3} textTransform="uppercase" letterSpacing="wide">Dados da Empresa (Recibos)</Text>
                         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                            <FormControl bg="white" p={4} borderRadius="xl" border="1px solid" borderColor="gray.200" shadow="sm">
-                                <FormLabel fontSize="xs" fontWeight="bold" color="gray.600" mb={2}>Razão Social</FormLabel>
-                                <Input size="sm" value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} placeholder="Ex: Guia do Texto LTDA" />
-                            </FormControl>
-                            <FormControl bg="white" p={4} borderRadius="xl" border="1px solid" borderColor="gray.200" shadow="sm">
-                                <FormLabel fontSize="xs" fontWeight="bold" color="gray.600" mb={2}>CNPJ</FormLabel>
-                                <Input size="sm" value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="Ex: 00.000.000/0001-00" />
-                            </FormControl>
+                            <FormControl bg="white" p={4} borderRadius="xl" border="1px solid" borderColor="gray.200" shadow="sm"><FormLabel fontSize="xs" fontWeight="bold" color="gray.600" mb={2}>Razão Social</FormLabel><Input size="sm" value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} placeholder="Ex: Guia do Texto LTDA" /></FormControl>
+                            <FormControl bg="white" p={4} borderRadius="xl" border="1px solid" borderColor="gray.200" shadow="sm"><FormLabel fontSize="xs" fontWeight="bold" color="gray.600" mb={2}>CNPJ</FormLabel><Input size="sm" value={cnpj} onChange={e => setCnpj(aplicarMascaraCNPJ(e.target.value))} placeholder="Ex: 00.000.000/0001-00" maxLength={18} /></FormControl>
                         </SimpleGrid>
                     </Box>
                     <Divider borderColor="gray.300" />
+                    
                     <Box>
                         <Text fontWeight="bold" color="gray.700" fontSize="sm" mb={3} textTransform="uppercase" letterSpacing="wide">Repasse aos Professores</Text>
                         <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>

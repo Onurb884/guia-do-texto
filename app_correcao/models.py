@@ -2,7 +2,6 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings 
 from django.utils import timezone
-from django.conf import settings
 
 class ConfiguracaoSistema(models.Model):
     razao_social_plataforma = models.CharField(max_length=255, default="Guia do Texto Plataforma Educacional")
@@ -19,23 +18,32 @@ class ConfiguracaoSistema(models.Model):
     preco_avulso_normal = models.DecimalField(max_digits=10, decimal_places=2, default=9.90)
     preco_avulso_vip = models.DecimalField(max_digits=10, decimal_places=2, default=14.90)
     
-    # NOVO: Texto Promocional Global
+    # Texto Promocional Global
     texto_promocional = models.CharField(max_length=255, blank=True, null=True, help_text="Aparecerá na caixa de promoções do aluno")
 
     class Meta:
         verbose_name = 'Configuração do Sistema'
 
 class CustomUser(AbstractUser):
+    # --- NOVAS PERMISSÕES DE ACESSO ---
     is_corretor = models.BooleanField(default=False)
+    is_coordenador = models.BooleanField(default=False, help_text="Acesso à Torre de Controle e Gestão de Corretores")
+    is_financeiro = models.BooleanField(default=False, help_text="Acesso ao Painel Financeiro e E-commerce")
+    
+    # --- PERFIL REDE SOCIAL ---
+    foto_perfil = models.ImageField(upload_to='avatares/', blank=True, null=True)
+
+    # --- DADOS PESSOAIS / FINANCEIROS ---
     telefone = models.CharField(max_length=20, blank=True, null=True)
     cpf = models.CharField(max_length=14, blank=True, null=True)
     chave_pix = models.CharField(max_length=100, blank=True, null=True)
     tipo_chave_pix = models.CharField(max_length=20, blank=True, null=True)
     banco = models.CharField(max_length=50, blank=True, null=True) 
     agencia_conta = models.CharField(max_length=50, blank=True, null=True) 
+    
+    # --- CURRÍCULO DO CORRETOR ---
     minibio = models.TextField(blank=True, null=True)
     curriculo = models.FileField(upload_to='curriculos/', blank=True, null=True)
-
     formacoes = models.JSONField(default=list, blank=True, null=True)
     experiencias = models.JSONField(default=list, blank=True, null=True)
 
@@ -75,6 +83,8 @@ class Correcao(models.Model):
     nota_final = models.IntegerField()
     comentario_geral = models.TextField(blank=True, null=True)
     data_correcao = models.DateTimeField(auto_now_add=True)
+    avaliacao_aluno = models.IntegerField(default=0)
+    comentario_avaliacao = models.TextField(blank=True, null=True)
 
 class NotaCompetencia(models.Model):
     correcao = models.ForeignKey(Correcao, on_delete=models.CASCADE, related_name='notas_competencias')
@@ -105,7 +115,7 @@ class RespostaRapida(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
 
 # =========================================================
-# TABELAS FINANCEIRAS DO CORRETOR (ATUALIZADO)
+# TABELAS FINANCEIRAS DO CORRETOR
 # =========================================================
 
 class Carteira(models.Model):
@@ -125,17 +135,11 @@ class PagamentoCorretor(models.Model):
         ('RECUSADO', 'Recibo Recusado')
     ]
     corretor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pagamentos_recebidos')
-    
-    # Datas de controlo
     data_solicitacao = models.DateTimeField(auto_now_add=True)
     data_pagamento = models.DateTimeField(null=True, blank=True)
-    
-    # Valores
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     qtd_normal = models.IntegerField(default=0)
     qtd_vip = models.IntegerField(default=0)
-    
-    # Compliance (A Nova Mágica)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='AGUARDANDO_RECIBO')
     arquivo_recibo = models.FileField(upload_to='recibos_assinados/', null=True, blank=True)
     motivo_recusa = models.TextField(null=True, blank=True)
@@ -152,24 +156,17 @@ class Pacote(models.Model):
     descricao = models.TextField(blank=True, null=True)
     preco = models.DecimalField(max_digits=10, decimal_places=2, help_text="Preço real de venda")
     preco_original = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text="Aparecerá riscado. Ex: De R$ 150 por R$ 99")
-    
     qtd_creditos_simples = models.IntegerField(default=0)
     qtd_creditos_vip = models.IntegerField(default=0)
-    
     ativo = models.BooleanField(default=True)
     permite_parcelamento = models.BooleanField(default=False)
     max_parcelas = models.IntegerField(default=1)
-    
     visivel_loja = models.BooleanField(default=True, help_text="Aparece na vitrine comum da loja?")
     compra_unica = models.BooleanField(default=False, help_text="O aluno só pode comprar este pacote 1 vez na vida?")
-    
     selo_destaque = models.CharField(max_length=50, blank=True, null=True, help_text="Ex: MAIS VENDIDO, RECOMENDADO")
-
-    # Oferta Relâmpago dentro do Pacote
     destaque_vitrine = models.BooleanField(default=False, help_text="É uma oferta relâmpago no painel do aluno?")
     texto_vitrine = models.CharField(max_length=100, blank=True, null=True, help_text="Ex: ⚡ Reta Final 50% OFF")
     data_fim_promocao = models.DateTimeField(blank=True, null=True, help_text="Para o cronômetro do pacote")
-
     criado_em = models.DateTimeField(auto_now_add=True)
 
 class HistoricoCompra(models.Model):
@@ -177,7 +174,7 @@ class HistoricoCompra(models.Model):
     pacote = models.ForeignKey(Pacote, on_delete=models.SET_NULL, null=True, blank=True)
     data_compra = models.DateTimeField(auto_now_add=True)
     valor_pago = models.DecimalField(max_digits=10, decimal_places=2)
-    descricao = models.CharField(max_length=200, blank=True, null=True) # Para compras avulsas
+    descricao = models.CharField(max_length=200, blank=True, null=True) 
 
 class BannerVitrine(models.Model):
     TIPO_CHOICES = (
@@ -189,13 +186,9 @@ class BannerVitrine(models.Model):
     titulo = models.CharField(max_length=100, help_text="Ex: ⚡ Oferta Relâmpago!")
     descricao = models.CharField(max_length=200, help_text="Ex: Pacote VIP com 50% OFF", blank=True, null=True)
     cor_fundo = models.CharField(max_length=50, default="linear(to-br, orange.400, red.400)", help_text="Código de cor do React")
-    
-    # MUDANÇA AQUI: TextField para suportar Base64 sem precisar do Pillow
     imagem_fundo = models.TextField(blank=True, null=True, help_text="Imagem convertida em Base64")
-    
     pacote_vinculado = models.ForeignKey(Pacote, on_delete=models.CASCADE, blank=True, null=True)
     data_fim = models.DateTimeField(blank=True, null=True, help_text="Quando o cronômetro deve zerar e o banner sumir")
-    
     ativo = models.BooleanField(default=True)
     ordem = models.IntegerField(default=0, help_text="Ordem de exibição no carrossel")
 
@@ -224,21 +217,15 @@ class MaterialApoio(models.Model):
         ('CORRETOR_REPERTORIO', 'Guia de Repertórios Aceitos'),
         ('CORRETOR_COMUNICADO', 'Comunicados de Alinhamento'),
     ]
-    
     titulo = models.CharField(max_length=200)
-    descricao = models.TextField(blank=True, null=True) # Resumo curto
-    conteudo = models.TextField(blank=True, null=True)  # Texto livre (ex: Comunicados)
-    
-    # A MÁGICA ACONTECE AQUI: Este campo vai guardar os formulários dinâmicos!
+    descricao = models.TextField(blank=True, null=True) 
+    conteudo = models.TextField(blank=True, null=True)  
     dados_extras = models.JSONField(blank=True, null=True, default=dict) 
-    
     categoria = models.CharField(max_length=30, choices=CATEGORIAS_CHOICES)
     arquivo = models.FileField(upload_to='materiais_apoio/', null=True, blank=True)
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.titulo
+    def __str__(self): return self.titulo
     
 class Transacao(models.Model):
     STATUS_CHOICES = (
@@ -246,21 +233,13 @@ class Transacao(models.Model):
         ('APROVADO', 'Aprovado'),
         ('RECUSADO', 'Recusado / Expirado'),
     )
-    
-    # Quem está a comprar
     aluno = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='transacoes')
-    
-    # Dados do Pagamento
-    pagamento_id = models.CharField(max_length=100, unique=True, null=True, blank=True) # ID gerado pelo Mercado Pago
+    pagamento_id = models.CharField(max_length=100, unique=True, null=True, blank=True) 
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     descricao = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
-    
-    # O que entregar quando for aprovado (o "carrinho de compras")
     qtd_simples = models.IntegerField(default=0)
     qtd_vip = models.IntegerField(default=0)
-    
-    # Datas de controle
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 

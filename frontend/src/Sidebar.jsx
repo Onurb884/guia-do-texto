@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     VStack, Button, Icon, Text, Box, Flex, Tooltip, Image, Avatar, useDisclosure, useToast,
-    Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, 
-    FormControl, FormLabel, Input, SimpleGrid, Divider, Badge, Select 
+    Badge 
 } from '@chakra-ui/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -10,10 +9,6 @@ import {
     CheckCircleIcon, StarIcon, 
     ChevronLeftIcon, ChevronRightIcon, WarningTwoIcon
 } from '@chakra-ui/icons';
-
-// Máscaras Brasileiras
-const maskPhone = (value) => value.replace(/\D/g, '').replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').replace(/(-\d{4})\d+?$/, '$1');
-const maskCPF = (value) => value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').replace(/(-\d{2})\d+?$/, '$1');
 
 // Ícones Customizados Premium (Padrão Ouro)
 const UsersIcon = (props) => <Icon viewBox="0 0 24 24" {...props}><path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" /></Icon>;
@@ -33,10 +28,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const [user, setUser] = useState(null);
   const [carteira, setCarteira] = useState({ saldo_simples: 0, saldo_vip: 0 });
   const toast = useToast();
-
-  const { isOpen: isProfileOpen, onOpen: onProfileOpen, onClose: onProfileClose } = useDisclosure();
-  const [profileData, setProfileData] = useState({ first_name: '', last_name: '', telefone: '', cpf: '', password: '', confirm_password: '' });
-  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -62,44 +53,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   }, [location.search]);
 
   const handleOpenProfile = () => {
-      // Separa a agência da conta para mostrar bonito nos inputs
-      let ag = ''; let cc = '';
-      if (user.agencia_conta) {
-          const parts = user.agencia_conta.split('Cc:');
-          if(parts.length > 1) {
-              ag = parts[0].replace('Ag:', '').trim();
-              cc = parts[1].trim();
-          } else { ag = user.agencia_conta; }
-      }
-
-      setProfileData({
-          first_name: user.first_name || '', last_name: user.last_name || '',
-          telefone: user.telefone || '', cpf: user.cpf || '',
-          password: '', confirm_password: '',
-          chave_pix: user.chave_pix || '', tipo_chave_pix: user.tipo_chave_pix || '',
-          banco: user.banco || '', agencia: ag, conta: cc
-      });
-      onProfileOpen();
-  };
-
-  const handleSaveProfile = async () => {
-      if (profileData.password && profileData.password !== profileData.confirm_password) return toast({ title: "As senhas não coincidem!", status: "warning" });
-      setSavingProfile(true);
-      try {
-          const token = localStorage.getItem('token');
-          const payload = { 
-              first_name: profileData.first_name, last_name: profileData.last_name, 
-              telefone: profileData.telefone, cpf: profileData.cpf,
-              chave_pix: profileData.chave_pix, tipo_chave_pix: profileData.tipo_chave_pix,
-              banco: profileData.banco, agencia: profileData.agencia, conta: profileData.conta,
-              ...(profileData.password ? { password: profileData.password } : {}) 
-          };
-          await axios.patch('http://127.0.0.1:8000/api/me/', payload, { headers: { Authorization: `Bearer ${token}` } });
-          setUser({ ...user, ...payload }); 
-          toast({ title: "Perfil atualizado com sucesso!", status: "success" });
-          onProfileClose();
-      } catch (error) { toast({ title: "Erro ao atualizar dados", status: "error" }); }
-      setSavingProfile(false);
+      // Agora apenas navegamos para a rota completa do Meu Perfil
+      navigate('/meu-perfil');
   };
 
   const isActive = (path) => {
@@ -115,7 +70,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   };
   
   const MenuButton = ({ path, icon, label }) => {
-    const active = isActive(path);
+    const active = isActive(path) || (label === 'Meu Perfil' && location.pathname === '/meu-perfil');
     return (
       <Tooltip label={!isOpen ? label : ""} placement="right" hasArrow>
           <Button 
@@ -224,7 +179,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                     borderRadius="xl" _hover={{ bg: "gray.50" }} cursor="pointer" transition="all 0.2s"
                     onClick={handleOpenProfile} mx="auto"
                 >
-                    <Avatar size="sm" name={user.first_name || "Usuário"} bg="teal.600" color="white" />
+                    <Avatar size="sm" name={user.first_name || "Usuário"} src={user.foto_perfil} bg="teal.600" color="white" />
                     {isOpen && (
                         <Box overflow="hidden" textAlign="left">
                             <Text fontSize="sm" fontWeight="bold" color="gray.800" isTruncated>{user.first_name || 'Completar Perfil'}</Text>
@@ -248,65 +203,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             </Tooltip>
         </Flex>
       </Box>
-
-      <Modal isOpen={isProfileOpen} onClose={onProfileClose} size="lg" isCentered>
-          <ModalOverlay backdropFilter="blur(4px)" />
-          <ModalContent borderRadius="xl">
-              <ModalHeader color="teal.700">Meu Perfil</ModalHeader>
-              <ModalCloseButton />
-              <ModalBody>
-                  <VStack spacing={4} align="stretch">
-                      <SimpleGrid columns={2} spacing={4}>
-                          <FormControl isRequired><FormLabel fontSize="sm" color="gray.600">Nome</FormLabel><Input bg="gray.50" value={profileData.first_name} onChange={e => setProfileData({...profileData, first_name: e.target.value})} /></FormControl>
-                          <FormControl isRequired><FormLabel fontSize="sm" color="gray.600">Sobrenome</FormLabel><Input bg="gray.50" value={profileData.last_name} onChange={e => setProfileData({...profileData, last_name: e.target.value})} placeholder="Seu apelido" /></FormControl>
-                      </SimpleGrid>
-                      <FormControl><FormLabel fontSize="sm" color="gray.600">E-mail (Acesso)</FormLabel><Input bg="gray.100" value={user.email} isReadOnly color="gray.500" /></FormControl>
-                      <SimpleGrid columns={2} spacing={4}>
-                          <FormControl><FormLabel fontSize="sm" color="gray.600">Celular / WhatsApp</FormLabel><Input bg="gray.50" value={profileData.telefone} onChange={e => setProfileData({...profileData, telefone: maskPhone(e.target.value)})} placeholder="(00) 00000-0000" maxLength={15} /></FormControl>
-                          <FormControl><FormLabel fontSize="sm" color="gray.600">CPF</FormLabel><Input bg="gray.50" value={profileData.cpf} onChange={e => setProfileData({...profileData, cpf: maskCPF(e.target.value)})} placeholder="000.000.000-00" maxLength={14} /></FormControl>
-                      </SimpleGrid>
-                      
-                      <Divider my={2} />
-                      <Text fontSize="sm" fontWeight="bold" color="gray.700">Segurança</Text>
-                      <Text fontSize="xs" color="gray.500" mb={2}>Deixe em branco se não quiser alterar a sua senha.</Text>
-                      <SimpleGrid columns={2} spacing={4}>
-                          <FormControl><FormLabel fontSize="sm" color="gray.600">Nova Senha</FormLabel><Input type="password" bg="gray.50" value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} placeholder="******" /></FormControl>
-                          <FormControl><FormLabel fontSize="sm" color="gray.600">Confirmar Senha</FormLabel><Input type="password" bg="gray.50" value={profileData.confirm_password} onChange={e => setProfileData({...profileData, confirm_password: e.target.value})} placeholder="******" /></FormControl>
-                      </SimpleGrid>
-
-                      {/* --- NOVO BLOCO BANCÁRIO PARA O CORRETOR --- */}
-                      {user.is_corretor && (
-                          <Box mt={2}>
-                              <Divider my={3} />
-                              <Text fontSize="sm" fontWeight="bold" color="teal.700" mb={3}>Dados de Recebimento</Text>
-                              <SimpleGrid columns={2} spacing={4} mb={3}>
-                                  <FormControl isRequired>
-                                      <FormLabel fontSize="sm" color="gray.600">Tipo de PIX</FormLabel>
-                                      <Select bg="gray.50" value={profileData.tipo_chave_pix || ''} onChange={e => setProfileData({...profileData, tipo_chave_pix: e.target.value})}>
-                                          <option value="">Selecione...</option>
-                                          <option value="CPF">CPF</option><option value="EMAIL">E-mail</option><option value="TELEFONE">Telefone</option><option value="ALEATORIA">Chave Aleatória</option>
-                                      </Select>
-                                  </FormControl>
-                                  <FormControl isRequired>
-                                      <FormLabel fontSize="sm" color="gray.600">Chave PIX</FormLabel>
-                                      <Input bg="gray.50" value={profileData.chave_pix || ''} onChange={e => setProfileData({...profileData, chave_pix: e.target.value})} placeholder="Obrigatório" />
-                                  </FormControl>
-                              </SimpleGrid>
-                              <SimpleGrid columns={3} spacing={3}>
-                                  <FormControl><FormLabel fontSize="sm" color="gray.600">Banco (Opc.)</FormLabel><Input bg="gray.50" value={profileData.banco || ''} onChange={e => setProfileData({...profileData, banco: e.target.value})} placeholder="Ex: Nubank" /></FormControl>
-                                  <FormControl><FormLabel fontSize="sm" color="gray.600">Agência (Opc.)</FormLabel><Input bg="gray.50" value={profileData.agencia || ''} onChange={e => setProfileData({...profileData, agencia: e.target.value})} placeholder="0001" /></FormControl>
-                                  <FormControl><FormLabel fontSize="sm" color="gray.600">Conta (Opc.)</FormLabel><Input bg="gray.50" value={profileData.conta || ''} onChange={e => setProfileData({...profileData, conta: e.target.value})} placeholder="0000-0" /></FormControl>
-                              </SimpleGrid>
-                          </Box>
-                      )}
-                  </VStack>
-              </ModalBody>
-              <ModalFooter borderTop="1px solid" borderColor="gray.100" mt={4}>
-                  <Button variant="ghost" mr={3} onClick={onProfileClose}>Cancelar</Button>
-                  <Button colorScheme="teal" onClick={handleSaveProfile} isLoading={savingProfile}>Salvar Alterações</Button>
-              </ModalFooter>
-          </ModalContent>
-      </Modal>
 
     </Flex>
   );

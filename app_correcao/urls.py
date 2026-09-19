@@ -14,7 +14,8 @@ from .views import (
     MaterialApoioViewSet, SolicitarRecuperacaoSenhaView, ConfirmarRedefinicaoSenhaView, 
     AdicionarCreditoManualView, GerarPagamentoPixView, VerificarStatusPixView, 
     VerificarPagamentoMPView, LoginView, CadastrarUsuarioView, GoogleLoginView, 
-    CandidaturaCorretorView, AssistenteSuporteView,
+    CandidaturaCorretorView, AssistenteSuporteView, enviar_avaliacao_corretor,
+    solicitar_recurso_redacao,
     
     # NOVAS ROTAS DO FLUXO RPA
     SolicitarSaqueView, EnviarReciboCorretorView, 
@@ -43,6 +44,8 @@ urlpatterns = [
 
     path('me/', MeusDadosView.as_view(), name='meus_dados'),
     path('minhas-redacoes/', MinhasRedacoesView.as_view(), name='minhas_redacoes'),
+    path('redacao/<int:pk>/avaliar/', enviar_avaliacao_corretor),
+    path('redacao/<int:pk>/recurso/', solicitar_recurso_redacao),
     path('redacao/<int:pk>/', DetalheRedacaoView.as_view(), name='detalhe_redacao'),
     path('enviar/', EnviarRedacaoView.as_view(), name='enviar_redacao'),
     path('corrigir/<int:pk>/ia/', CorrecaoIAView.as_view(), name='corrigir_ia'),

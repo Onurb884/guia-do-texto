@@ -6,12 +6,20 @@ import {
   Table, Thead, Tbody, Tr, Th, Td, Card, CardBody, SimpleGrid, Stat, StatLabel, 
   StatNumber, Avatar, Divider, useDisclosure,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, 
-  FormControl, FormLabel, IconButton, Textarea // <-- Adicionado o Textarea aqui
+  FormControl, FormLabel, IconButton, Textarea, Spinner, Tooltip,
+  Alert, AlertIcon // <--- O ERRO ESTAVA AQUI! Faltava importar isto!
 } from '@chakra-ui/react';
 import { 
     SearchIcon, CheckCircleIcon, NotAllowedIcon, DownloadIcon, 
-    ArrowBackIcon, TimeIcon, AddIcon, EditIcon, StarIcon // <-- Adicionado o StarIcon aqui
+    ArrowBackIcon, TimeIcon, AddIcon, EditIcon, StarIcon, LockIcon
 } from '@chakra-ui/icons';
+
+// FUNÇÃO SUPER SEGURA PARA A FOTO NÃO QUEBRAR O REACT
+const getUrlFoto = (url) => {
+    if (!url || typeof url !== 'string') return undefined;
+    if (url.startsWith('http')) return url;
+    return `http://127.0.0.1:8000${url}`;
+};
 
 function GestaoUsuarios() {
 
@@ -45,7 +53,7 @@ function GestaoUsuarios() {
           
           toast({ title: "Créditos atualizados!", status: "success" });
           setModalCreditosOpen(false);
-          // Aqui você pode chamar a sua função que recarrega a lista de usuários se quiser
+          carregarDados();
       } catch (error) {
           toast({ title: "Erro ao adicionar créditos", description: error.response?.data?.erro, status: "error" });
       }
@@ -60,18 +68,36 @@ function GestaoUsuarios() {
   
   const [viewMode, setViewMode] = useState('LIST');
   const [usuarioAtivo, setUsuarioAtivo] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   
   const { isOpen: isNewOpen, onOpen: onNewOpen, onClose: onNewClose } = useDisclosure();
-  const [novoAdmin, setNovoAdmin] = useState({ first_name: '', email: '', password: '', perfil_acesso: 'COORDENADOR' });
+  const [novoAdmin, setNovoAdmin] = useState({ first_name: '', last_name: '', email: '', password: '', perfil_acesso: 'ALUNO' });
   const [salvandoAdmin, setSalvandoAdmin] = useState(false);
 
   // CONTROLE DO MODAL DE EDIÇÃO
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
-  const [dadosEdicao, setDadosEdicao] = useState({ first_name: '', last_name: '', email: '', is_staff: false, is_superuser: false, is_corretor: false });
+  const [dadosEdicao, setDadosEdicao] = useState({ 
+      first_name: '', last_name: '', email: '', password: '',
+      is_staff: false, is_superuser: false, is_financeiro: false, is_coordenador: false, is_corretor: false 
+  });
 
   const toast = useToast();
 
-  useEffect(() => { carregarDados(); }, []);
+  useEffect(() => { 
+      carregarDados(); 
+      verificarPermissoesLogadas();
+  }, []);
+
+  const verificarPermissoesLogadas = async () => {
+    try {
+      const res = await axios.get('http://127.0.0.1:8000/api/me/', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setCurrentUser(res.data);
+    } catch (e) {
+      // Ignora silenciosamente, o login falhou ou token expirou
+    }
+  };
 
   const carregarDados = async () => {
     setLoading(true);
@@ -82,6 +108,35 @@ function GestaoUsuarios() {
     } catch (e) { toast({ title: 'Erro ao carregar dados', status: 'error' }); }
     setLoading(false);
   };
+
+  // ==============================================================================
+  // HELPERS: IDENTIFICAÇÃO DE CARGOS E CORES
+  // ==============================================================================
+  const isMaster = currentUser ? currentUser.is_superuser : false;
+
+  const getPapelUsuario = (u) => {
+    if (!u) return 'ALUNO';
+    if (u.is_superuser) return 'MASTER';
+    if (u.is_financeiro) return 'FINANCEIRO';
+    if (u.is_coordenador) return 'COORDENADOR';
+    if (u.is_corretor) return 'CORRETOR';
+    if (u.is_staff) return 'COORDENADOR'; 
+    return 'ALUNO';
+  };
+
+  const renderBadgePapel = (papel) => {
+    switch(papel) {
+      case 'MASTER': return <Badge colorScheme="blackAlpha" bg="black" color="white" px={2} py={0.5} borderRadius="md">👑 Admin Master</Badge>;
+      case 'FINANCEIRO': return <Badge colorScheme="green" px={2} py={0.5} borderRadius="md">💰 Financeiro</Badge>;
+      case 'COORDENADOR': return <Badge colorScheme="purple" px={2} py={0.5} borderRadius="md">🛡️ Coordenador</Badge>;
+      case 'CORRETOR': return <Badge colorScheme="teal" px={2} py={0.5} borderRadius="md">📝 Professor</Badge>;
+      default: return <Badge colorScheme="gray" variant="outline" px={2} py={0.5} borderRadius="md">🎓 Aluno</Badge>;
+    }
+  };
+
+  // ==============================================================================
+  // AÇÕES: GERIR PERFIS, CRIAR E EDITAR
+  // ==============================================================================
 
   const abrirPerfil = (u) => {
       let formacoesArray = [];
@@ -98,9 +153,12 @@ function GestaoUsuarios() {
           first_name: usuarioAtivo.first_name || '',
           last_name: usuarioAtivo.last_name || '',
           email: usuarioAtivo.email || '',
-          is_staff: usuarioAtivo.is_staff,
-          is_superuser: usuarioAtivo.is_superuser,
-          is_corretor: usuarioAtivo.is_corretor
+          password: '',
+          is_staff: usuarioAtivo.is_staff || false,
+          is_superuser: usuarioAtivo.is_superuser || false,
+          is_financeiro: usuarioAtivo.is_financeiro || false,
+          is_coordenador: usuarioAtivo.is_coordenador || false,
+          is_corretor: usuarioAtivo.is_corretor || false
       });
       onEditOpen();
   };
@@ -108,15 +166,32 @@ function GestaoUsuarios() {
   const salvarEdicao = async () => {
     try {
         const token = localStorage.getItem('token');
-        const res = await axios.patch(`http://127.0.0.1:8000/api/gestao/usuarios/${usuarioAtivo.id}/`, dadosEdicao, { headers: { Authorization: `Bearer ${token}` } });
+        
+        // Criar um payload focado que o backend entende
+        const payload = {
+            first_name: dadosEdicao.first_name,
+            last_name: dadosEdicao.last_name,
+            email: dadosEdicao.email,
+        };
+        if (dadosEdicao.password && dadosEdicao.password.trim() !== '') {
+            payload.password = dadosEdicao.password;
+        }
+
+        // Definir a tag nivel_acesso para o backend
+        if (dadosEdicao.is_superuser) payload.nivel_acesso = 'MASTER';
+        else if (dadosEdicao.is_financeiro) payload.nivel_acesso = 'FINANCEIRO';
+        else if (dadosEdicao.is_coordenador || dadosEdicao.is_staff) payload.nivel_acesso = 'COORDENADOR';
+        else if (dadosEdicao.is_corretor) payload.nivel_acesso = 'CORRETOR';
+        else payload.nivel_acesso = 'ALUNO';
+
+        const res = await axios.put(`http://127.0.0.1:8000/api/gestao/usuarios/${usuarioAtivo.id}/`, payload, { headers: { Authorization: `Bearer ${token}` } });
         toast({ title: 'Dados atualizados com sucesso!', status: 'success' });
         
-        // Atualiza a tela de perfil localmente para não precisar recarregar tudo
         setUsuarioAtivo({ ...usuarioAtivo, ...res.data });
         carregarDados();
         onEditClose();
     } catch (e) {
-        toast({ title: 'Erro ao atualizar dados', status: 'error' });
+        toast({ title: 'Erro ao atualizar dados', description: e.response?.data?.erro, status: 'error' });
     }
   };
 
@@ -130,61 +205,71 @@ function GestaoUsuarios() {
     } catch (e) { toast({ title: 'Erro ao alterar status', status: 'error' }); }
   };
 
+  const abrirNovaConta = () => {
+    setNovoAdmin({ 
+        first_name: '', last_name: '', email: '', password: '', 
+        perfil_acesso: isMaster ? 'COORDENADOR' : 'CORRETOR' 
+    });
+    onNewOpen();
+  };
+
   const criarMembroEquipe = async () => {
     if (!novoAdmin.first_name || !novoAdmin.email || !novoAdmin.password) return toast({ title: 'Preencha todos os campos obrigatórios', status: 'warning' });
     setSalvandoAdmin(true);
     
-    const formData = new FormData();
-    formData.append('username', novoAdmin.email);
-    formData.append('email', novoAdmin.email);
-    formData.append('first_name', novoAdmin.first_name);
-    formData.append('password', novoAdmin.password);
-    formData.append('is_active', 'true');
-    
-    if (novoAdmin.perfil_acesso === 'MASTER') {
-        formData.append('is_staff', 'true');
-        formData.append('is_superuser', 'true');
-    } else {
-        formData.append('is_staff', 'true'); 
-        formData.append('is_superuser', 'false');
-    }
+    // Convertendo para payload JSON para respeitar a nova API de cargos
+    const payload = {
+        first_name: novoAdmin.first_name,
+        last_name: novoAdmin.last_name,
+        email: novoAdmin.email,
+        password: novoAdmin.password,
+        nivel_acesso: novoAdmin.perfil_acesso
+    };
 
     try {
         const token = localStorage.getItem('token');
-        await axios.post('http://127.0.0.1:8000/api/gestao/usuarios/', formData, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('http://127.0.0.1:8000/api/gestao/usuarios/', payload, { headers: { Authorization: `Bearer ${token}` } });
         toast({ title: 'Usuário adicionado!', status: 'success' });
         carregarDados();
         onNewClose();
-        setNovoAdmin({ first_name: '', email: '', password: '', perfil_acesso: 'COORDENADOR' });
-    } catch (e) { toast({ title: 'Erro ao criar conta', description: 'O e-mail já pode estar em uso.', status: 'error' }); }
+        setNovoAdmin({ first_name: '', last_name: '', email: '', password: '', perfil_acesso: 'ALUNO' });
+    } catch (e) { toast({ title: 'Erro ao criar conta', description: e.response?.data?.erro, status: 'error' }); }
     setSalvandoAdmin(false);
   };
 
   const listaFiltrada = usuarios.filter(u => {
       const matchBusca = (u.first_name || '').toLowerCase().includes(busca.toLowerCase()) || (u.email || '').toLowerCase().includes(busca.toLowerCase());
+      
+      const papel = getPapelUsuario(u);
       let matchPapel = true;
-      if (filtroPapel === 'CORRETOR') matchPapel = u.is_corretor && !u.is_staff;
-      if (filtroPapel === 'ALUNO') matchPapel = !u.is_corretor && !u.is_staff;
-      if (filtroPapel === 'ADMIN') matchPapel = u.is_staff;
+      if (filtroPapel === 'CORRETOR') matchPapel = papel === 'CORRETOR';
+      if (filtroPapel === 'ALUNO') matchPapel = papel === 'ALUNO';
+      if (filtroPapel === 'ADMIN') matchPapel = ['MASTER', 'FINANCEIRO', 'COORDENADOR'].includes(papel);
+      
       let matchStatus = true;
       if (filtroStatus === 'ATIVOS') matchStatus = u.is_active;
       if (filtroStatus === 'SUSPENSOS') matchStatus = !u.is_active;
       return matchBusca && matchPapel && matchStatus;
   });
 
-  const qtdAlunos = usuarios.filter(u => !u.is_corretor && !u.is_staff).length;
-  const qtdCorretores = usuarios.filter(u => u.is_corretor && !u.is_staff).length;
+  const qtdAlunos = usuarios.filter(u => getPapelUsuario(u) === 'ALUNO').length;
+  const qtdCorretores = usuarios.filter(u => getPapelUsuario(u) === 'CORRETOR').length;
   const qtdPendentes = usuarios.filter(u => !u.is_active && u.is_corretor).length;
 
+  if (loading && usuarios.length === 0) return <Flex w="full" h="100vh" align="center" justify="center"><Spinner size="xl" color="teal.500" /></Flex>;
+
   if (viewMode === 'PROFILE' && usuarioAtivo) {
+      const papel = getPapelUsuario(usuarioAtivo);
       return (
           <Container maxW="full" py={8} px={{ base: 4, md: 8 }} bg="gray.50" minH="100vh">
               <Flex justify="space-between" align="center" mb={6}>
                   <Button leftIcon={<ArrowBackIcon />} variant="ghost" onClick={() => setViewMode('LIST')}>Voltar para Lista</Button>
                   <HStack spacing={4}>
-                      <Button leftIcon={<EditIcon />} colorScheme="blue" variant="outline" onClick={prepararEdicao}>
-                          Editar Dados
-                      </Button>
+                      <Tooltip label={(papel === 'MASTER' && !isMaster) ? "Acesso Restrito" : "Editar Dados"} hasArrow>
+                          <Button leftIcon={<EditIcon />} colorScheme="blue" variant="outline" onClick={prepararEdicao} isDisabled={papel === 'MASTER' && !isMaster}>
+                              Editar Dados
+                          </Button>
+                      </Tooltip>
                       {!usuarioAtivo.is_active ? (
                           <Button colorScheme="green" size="lg" leftIcon={<CheckCircleIcon />} onClick={() => toggleAtivo(usuarioAtivo.id, usuarioAtivo.is_active)} shadow="md">Aprovar Candidatura</Button>
                       ) : (
@@ -199,7 +284,8 @@ function GestaoUsuarios() {
                       <CardBody px={{ base: 4, md: 8 }} pb={8}>
                           <Flex direction={{ base: 'column', md: 'row' }} align={{ base: 'center', md: 'flex-start' }} gap={6}>
                               <Box mt="-60px">
-                                  <Avatar size="2xl" name={`${usuarioAtivo.first_name} ${usuarioAtivo.last_name}`} src={usuarioAtivo.foto_perfil} border="4px solid white" shadow="md" bg="teal.500" color="white" />
+                                  {/* FOTO SEGURA E CORRIGIDA AQUI */}
+                                  <Avatar size="2xl" name={`${usuarioAtivo.first_name || ''} ${usuarioAtivo.last_name || ''}`.trim()} src={getUrlFoto(usuarioAtivo.foto_perfil)} border="4px solid white" shadow="md" bg="teal.500" color="white" />
                               </Box>
                               <Box flex="1" textAlign={{ base: 'center', md: 'left' }} pt={2}>
                                   <Heading size="lg" color="gray.800" lineHeight="1.2">{usuarioAtivo.first_name} {usuarioAtivo.last_name}</Heading>
@@ -218,7 +304,7 @@ function GestaoUsuarios() {
                               {usuarioAtivo.telefone && <Text color="gray.600">📱 {usuarioAtivo.telefone}</Text>}
                               {usuarioAtivo.cpf && <Text color="gray.600">🪪 CPF: {usuarioAtivo.cpf}</Text>}
                               {usuarioAtivo.curriculo && (
-                                  <Button as="a" href={usuarioAtivo.curriculo} target="_blank" size="sm" colorScheme="blue" variant="outline" leftIcon={<DownloadIcon />}>
+                                  <Button as="a" href={getUrlFoto(usuarioAtivo.curriculo)} target="_blank" size="sm" colorScheme="blue" variant="outline" leftIcon={<DownloadIcon />}>
                                       Baixar PDF Original
                                   </Button>
                               )}
@@ -284,19 +370,17 @@ function GestaoUsuarios() {
                                   <VStack align="stretch" spacing={3}>
                                       <Box>
                                           <Text fontSize="xs" color="gray.500" fontWeight="bold" textTransform="uppercase">Cargo na Plataforma</Text>
-                                          {usuarioAtivo.is_superuser ? <Badge colorScheme="blackAlpha" bg="black" color="white" mt={1}>Dono (Master)</Badge> : 
-                                           usuarioAtivo.is_staff ? <Badge colorScheme="purple" mt={1}>Coordenador</Badge> : 
-                                           usuarioAtivo.is_corretor ? <Badge colorScheme="teal" mt={1}>Corretor</Badge> : 
-                                           <Badge colorScheme="orange" variant="outline" mt={1}>Aluno</Badge>}
+                                          <Box mt={2}>{renderBadgePapel(papel)}</Box>
                                       </Box>
                                   </VStack>
                               </CardBody>
                           </Card>
 
-                          {(usuarioAtivo.is_corretor || usuarioAtivo.is_staff) && (
+                          {/* DADOS BANCÁRIOS APARECEM PARA EQUIPA E CORRETORES */}
+                          {(papel !== 'ALUNO') && (
                               <Card bg="green.50" shadow="sm" borderRadius="xl" border="1px solid" borderColor="green.200">
                                   <CardBody p={6}>
-                                      <Heading size="sm" color="green.800" mb={4}>Dados para Repasse</Heading>
+                                      <Heading size="sm" color="green.800" mb={4}>Dados Financeiros</Heading>
                                       <VStack align="stretch" spacing={4}>
                                           <Box><Text fontSize="xs" color="green.600" fontWeight="bold" textTransform="uppercase">Chave PIX ({usuarioAtivo.tipo_chave_pix || 'Não inf.'})</Text><Text color="gray.800" fontWeight="bold">{usuarioAtivo.chave_pix || 'Não cadastrada'}</Text></Box>
                                           {(usuarioAtivo.banco || usuarioAtivo.agencia_conta) && (
@@ -310,7 +394,7 @@ function GestaoUsuarios() {
                   </SimpleGrid>
 
                   {/* MODAL DE EDIÇÃO DO USUÁRIO ATIVO */}
-                  <Modal isOpen={isEditOpen} onClose={onEditClose} isCentered>
+                  <Modal isOpen={isEditOpen} onClose={onEditClose} isCentered size="lg">
                       <ModalOverlay backdropFilter="blur(4px)" />
                       <ModalContent borderRadius="xl">
                           <ModalHeader color="teal.700">Editar Dados Administrativos</ModalHeader>
@@ -332,28 +416,45 @@ function GestaoUsuarios() {
                                       <Input type="email" value={dadosEdicao.email} onChange={e => setDadosEdicao({...dadosEdicao, email: e.target.value})} />
                                   </FormControl>
                                   
+                                  <FormControl>
+                                      <FormLabel>Nova Senha (Opcional)</FormLabel>
+                                      <InputGroup>
+                                        <InputLeftElement pointerEvents='none'><LockIcon color='gray.300' /></InputLeftElement>
+                                        <Input type="text" placeholder="Deixe em branco para não alterar" value={dadosEdicao.password} onChange={e => setDadosEdicao({...dadosEdicao, password: e.target.value})} />
+                                      </InputGroup>
+                                  </FormControl>
+                                  
                                   <Divider my={2} />
                                   
                                   <FormControl>
                                       <FormLabel>Nível de Acesso</FormLabel>
                                       <Select value={
                                           dadosEdicao.is_superuser ? 'MASTER' : 
-                                          dadosEdicao.is_staff ? 'COORDENADOR' : 
+                                          dadosEdicao.is_financeiro ? 'FINANCEIRO' : 
+                                          (dadosEdicao.is_staff || dadosEdicao.is_coordenador) ? 'COORDENADOR' : 
                                           dadosEdicao.is_corretor ? 'CORRETOR' : 'ALUNO'
                                       } onChange={e => {
                                           const v = e.target.value;
                                           setDadosEdicao({
                                               ...dadosEdicao,
                                               is_superuser: v === 'MASTER',
-                                              is_staff: v === 'MASTER' || v === 'COORDENADOR',
+                                              is_financeiro: v === 'FINANCEIRO',
+                                              is_coordenador: v === 'COORDENADOR' || v === 'MASTER',
+                                              is_staff: ['MASTER', 'FINANCEIRO', 'COORDENADOR'].includes(v),
                                               is_corretor: v === 'CORRETOR'
                                           });
                                       }}>
-                                          <option value="ALUNO">🎓 Aluno</option>
+                                          {isMaster && <option value="MASTER">👑 Admin Master</option>}
+                                          {isMaster && <option value="FINANCEIRO">💰 Financeiro</option>}
+                                          {isMaster && <option value="COORDENADOR">🛡️ Coordenador</option>}
                                           <option value="CORRETOR">✍️ Corretor</option>
-                                          <option value="COORDENADOR">🛡️ Coordenador</option>
-                                          <option value="MASTER">👑 Admin Master</option>
+                                          <option value="ALUNO">🎓 Aluno</option>
                                       </Select>
+                                      {!isMaster && (
+                                        <Text fontSize="xs" color="orange.500" mt={1}>
+                                            Como Coordenador, você não pode atribuir cargos de diretoria financeira/master.
+                                        </Text>
+                                      )}
                                   </FormControl>
                               </VStack>
                           </ModalBody>
@@ -400,10 +501,19 @@ function GestaoUsuarios() {
 
         <Flex gap={4} bg="white" p={5} borderRadius="xl" boxShadow="sm" align="center" border="1px solid" borderColor="gray.100" wrap="wrap">
             <InputGroup flex={1} minW="250px"><InputLeftElement pointerEvents='none'><SearchIcon color='gray.400' /></InputLeftElement><Input placeholder="Buscar por nome ou e-mail..." value={busca} onChange={e => setBusca(e.target.value)} /></InputGroup>
-            <Select w="180px" value={filtroPapel} onChange={e => setFiltroPapel(e.target.value)}><option value="TODOS">Perfil: Todos</option><option value="CORRETOR">Apenas Corretores</option><option value="ALUNO">Apenas Alunos</option><option value="ADMIN">Apenas Equipe/Admin</option></Select>
-            <Select w="180px" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}><option value="TODOS">Status: Todos</option><option value="ATIVOS">Apenas Ativos</option><option value="SUSPENSOS">Pendentes/Suspensos</option></Select>
+            <Select w="180px" value={filtroPapel} onChange={e => setFiltroPapel(e.target.value)}>
+                <option value="TODOS">Perfil: Todos</option>
+                <option value="CORRETOR">Apenas Corretores</option>
+                <option value="ALUNO">Apenas Alunos</option>
+                <option value="ADMIN">Apenas Equipe/Admin</option>
+            </Select>
+            <Select w="180px" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+                <option value="TODOS">Status: Todos</option>
+                <option value="ATIVOS">Apenas Ativos</option>
+                <option value="SUSPENSOS">Pendentes/Suspensos</option>
+            </Select>
             
-            <Button colorScheme="teal" leftIcon={<AddIcon />} shadow="md" onClick={onNewOpen} ml={{ base: 0, md: "auto" }}>
+            <Button colorScheme="teal" leftIcon={<AddIcon />} shadow="md" onClick={abrirNovaConta} ml={{ base: 0, md: "auto" }}>
                 Novo Usuário
             </Button>
         </Flex>
@@ -419,49 +529,50 @@ function GestaoUsuarios() {
                     </Tr>
                 </Thead>
                 <Tbody>
-                    {listaFiltrada.map(u => (
-                    <Tr key={u.id} _hover={{ bg: 'gray.50' }} transition="all 0.2s">
-                        <Td px={6}>
-                            <Flex align="center" gap={3}>
-                                <Avatar size="sm" name={`${u.first_name} ${u.last_name}`} bg="teal.500" color="white" />
-                                <Box>
-                                    <Text fontWeight="bold" fontSize="sm" color="gray.800">{u.first_name || 'Sem Nome'} {u.last_name}</Text>
-                                    <Text fontSize="xs" color="gray.500">{u.email}</Text>
-                                </Box>
-                            </Flex>
-                        </Td>
-                        
-                        <Td px={4} textAlign="center">
-                            {u.is_superuser ? <Badge colorScheme="blackAlpha" bg="black" color="white">Admin</Badge> : 
-                             u.is_staff ? <Badge colorScheme="purple">Coord.</Badge> : 
-                             u.is_corretor ? <Badge colorScheme="teal">Corretor</Badge> : 
-                             <Badge colorScheme="gray">Aluno</Badge>}
-                        </Td>
-
-                        <Td px={4} textAlign="center">
-                            {u.is_active ? 
-                                <Badge colorScheme="green" variant="subtle" borderRadius="md" px={2}>Ativo</Badge> : 
-                                <Badge colorScheme="orange" variant="solid" borderRadius="md" px={2}>Pendente</Badge>
-                            }
-                        </Td>
-
-                        {/* AQUI ESTÁ O BOTÃO DE CRÉDITOS NA TABELA LADO A LADO COM O PERFIL */}
-                        <Td px={6} textAlign="center">
-                            <HStack spacing={2} justify="center">
-                                <Button size="sm" colorScheme="teal" variant={u.is_active ? "ghost" : "solid"} onClick={() => abrirPerfil(u)}>
-                                    {u.is_active ? 'Ver Perfil' : 'Avaliar'}
-                                </Button>
+                    {listaFiltrada.map(u => {
+                        const papel = getPapelUsuario(u);
+                        return (
+                            <Tr key={u.id} _hover={{ bg: 'gray.50' }} transition="all 0.2s">
+                                <Td px={6}>
+                                    <Flex align="center" gap={3}>
+                                        {/* AQUI ESTÁ A FOTO NA LISTA SEGURO */}
+                                        <Avatar size="sm" name={`${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Usuário'} src={getUrlFoto(u.foto_perfil)} bg="teal.500" color="white" />
+                                        <Box>
+                                            <Text fontWeight="bold" fontSize="sm" color="gray.800">{u.first_name || 'Sem Nome'} {u.last_name}</Text>
+                                            <Text fontSize="xs" color="gray.500">{u.email}</Text>
+                                        </Box>
+                                    </Flex>
+                                </Td>
                                 
-                                {/* Mostrar o botão de créditos apenas se o usuário for ALUNO */}
-                                {(!u.is_staff && !u.is_corretor) && (
-                                    <Button size="sm" colorScheme="purple" variant="outline" onClick={() => abrirModalCreditos(u)}>
-                                        Créditos
-                                    </Button>
-                                )}
-                            </HStack>
-                        </Td>
-                    </Tr>
-                    ))}
+                                <Td px={4} textAlign="center">
+                                    {renderBadgePapel(papel)}
+                                </Td>
+
+                                <Td px={4} textAlign="center">
+                                    {u.is_active ? 
+                                        <Badge colorScheme="green" variant="subtle" borderRadius="md" px={2}>Ativo</Badge> : 
+                                        <Badge colorScheme="orange" variant="solid" borderRadius="md" px={2}>Pendente</Badge>
+                                    }
+                                </Td>
+
+                                {/* AQUI ESTÁ O BOTÃO DE CRÉDITOS NA TABELA LADO A LADO COM O PERFIL */}
+                                <Td px={6} textAlign="center">
+                                    <HStack spacing={2} justify="center">
+                                        <Button size="sm" colorScheme="teal" variant={u.is_active ? "ghost" : "solid"} onClick={() => abrirPerfil(u)}>
+                                            {u.is_active ? 'Ver Perfil' : 'Avaliar'}
+                                        </Button>
+                                        
+                                        {/* Mostrar o botão de créditos apenas se o usuário for ALUNO */}
+                                        {(papel === 'ALUNO') && (
+                                            <Button size="sm" colorScheme="purple" variant="outline" onClick={() => abrirModalCreditos(u)}>
+                                                Créditos
+                                            </Button>
+                                        )}
+                                    </HStack>
+                                </Td>
+                            </Tr>
+                        )
+                    })}
                     {listaFiltrada.length === 0 && <Tr><Td colSpan={4} textAlign="center" py={10} color="gray.500">Nenhum registro encontrado.</Td></Tr>}
                 </Tbody>
             </Table>
@@ -519,11 +630,22 @@ function GestaoUsuarios() {
                 <ModalCloseButton />
                 <ModalBody>
                     <VStack spacing={4}>
-                        <Text fontSize="sm" color="gray.500" w="full">Esta opção cria utilizadores administrativos com acesso imediato à plataforma. Eles não precisam passar por avaliação.</Text>
-                        <FormControl isRequired>
-                            <FormLabel>Nome Completo</FormLabel>
-                            <Input value={novoAdmin.first_name} onChange={e => setNovoAdmin({...novoAdmin, first_name: e.target.value})} placeholder="Ex: Maria Clara de Souza" />
-                        </FormControl>
+                        <Alert status="info" borderRadius="md" fontSize="sm">
+                          <AlertIcon />
+                          Crie um perfil administrativo, professor ou aluno manualmente sem precisar passar pela página de cadastro do site.
+                        </Alert>
+                        
+                        <SimpleGrid columns={2} spacing={4} w="full">
+                            <FormControl isRequired>
+                                <FormLabel>Nome</FormLabel>
+                                <Input value={novoAdmin.first_name} onChange={e => setNovoAdmin({...novoAdmin, first_name: e.target.value})} placeholder="Ex: Maria Clara" />
+                            </FormControl>
+                            <FormControl>
+                                <FormLabel>Sobrenome</FormLabel>
+                                <Input value={novoAdmin.last_name} onChange={e => setNovoAdmin({...novoAdmin, last_name: e.target.value})} placeholder="Ex: de Souza" />
+                            </FormControl>
+                        </SimpleGrid>
+
                         <FormControl isRequired>
                             <FormLabel>E-mail Corporativo</FormLabel>
                             <Input type="email" value={novoAdmin.email} onChange={e => setNovoAdmin({...novoAdmin, email: e.target.value})} placeholder="email@plataforma.com" />
@@ -532,11 +654,16 @@ function GestaoUsuarios() {
                             <FormLabel>Senha de Acesso</FormLabel>
                             <Input type="password" value={novoAdmin.password} onChange={e => setNovoAdmin({...novoAdmin, password: e.target.value})} placeholder="Crie uma senha inicial" />
                         </FormControl>
+                        
+                        {/* SELECT SEGURO SEM CONDICIONAIS DENTRO */}
                         <FormControl isRequired>
                             <FormLabel>Nível de Acesso</FormLabel>
                             <Select value={novoAdmin.perfil_acesso} onChange={e => setNovoAdmin({...novoAdmin, perfil_acesso: e.target.value})}>
-                                <option value="COORDENADOR">🛡️ Coordenador (Gere Corretores e Fila)</option>
-                                <option value="MASTER">👑 Admin Master (Acesso Total)</option>
+                                {isMaster && <option value="MASTER">👑 Admin Master</option>}
+                                {isMaster && <option value="FINANCEIRO">💰 Financeiro</option>}
+                                {isMaster && <option value="COORDENADOR">🛡️ Coordenador</option>}
+                                <option value="CORRETOR">📝 Professor Corretor</option>
+                                <option value="ALUNO">🎓 Aluno Treineiro</option>
                             </Select>
                         </FormControl>
                     </VStack>
