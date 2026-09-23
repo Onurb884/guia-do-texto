@@ -271,9 +271,12 @@ class CorrecaoSerializer(serializers.ModelSerializer):
     competencias = NotaCompetenciaSerializer(source='notas_competencias', many=True, read_only=True)
     anotacoes = AnotacaoSerializer(many=True, read_only=True)
     comentario_geral = serializers.SerializerMethodField()
+    
     class Meta:
         model = Correcao
-        fields = ['nota_final', 'competencias', 'comentario_geral', 'anotacoes']
+        # AQUI ESTÁ O SEGREDO: As variáveis têm de estar nesta lista!
+        fields = ['id', 'nota_final', 'competencias', 'comentario_geral', 'anotacoes', 'avaliacao_aluno', 'comentario_avaliacao']
+        
     def get_comentario_geral(self, obj):
         return obj.comentario_geral
 
@@ -290,7 +293,7 @@ class RedacaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Redacao
         fields = '__all__'
-        read_only_fields = ['aluno', 'status', 'corretor_atual', 'data_envio', 'nota_final', 'correcao', 'avaliacao_aluno', 'comentario_avaliacao']
+        read_only_fields = ['aluno', 'status', 'corretor_atual', 'data_envio', 'nota_final', 'correcao']
 
     def get_aluno_nome(self, obj):
         nome_completo = f"{obj.aluno.first_name} {obj.aluno.last_name}".strip()

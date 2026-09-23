@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Container, Heading, Text, VStack, HStack, Button, Icon, Box, 
   useToast, Flex, Badge, Input, Select, InputGroup, InputLeftElement, 
-  Table, Thead, Tbody, Tr, Th, Td, Card, SimpleGrid, Stat, StatLabel, 
+  Table, Thead, Tbody, Tr, Th, Td, Card, CardBody, SimpleGrid, Stat, StatLabel, 
   StatNumber, Tooltip, useDisclosure, Modal, ModalOverlay, ModalContent, 
   ModalHeader, ModalCloseButton, ModalBody, ModalFooter, FormControl, FormLabel, 
   Divider, Tabs, TabList, TabPanels, Tab, TabPanel, IconButton,
@@ -12,51 +12,72 @@ import {
 } from '@chakra-ui/react';
 import { 
   SearchIcon, WarningIcon, UnlockIcon, WarningTwoIcon, 
-  StarIcon, ViewIcon, ArrowBackIcon, CheckCircleIcon, EditIcon, RepeatIcon
+  StarIcon, ViewIcon, ArrowBackIcon, CheckCircleIcon, EditIcon, RepeatIcon, ViewOffIcon, InfoIcon
 } from '@chakra-ui/icons';
 
-const INFO_COMPETENCIAS_ENEM = { 
-  1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 
-  2: { nome: "Tema/Estrutura", cor: "blue.500", bg: "blue.50" }, 
-  3: { nome: "Argumentação", cor: "orange.500", bg: "orange.50" }, 
-  4: { nome: "Coesão", cor: "green.500", bg: "green.50" }, 
-  5: { nome: "Proposta", cor: "purple.500", bg: "purple.50" } 
+const INFO_COMPETENCIAS_ENEM = { 1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 2: { nome: "Tema/Estrutura/Repertório", cor: "blue.500", bg: "blue.50" }, 3: { nome: "Argumentação", cor: "orange.500", bg: "orange.50" }, 4: { nome: "Coesão", cor: "green.500", bg: "green.50" }, 5: { nome: "Proposta", cor: "purple.500", bg: "purple.50" } };
+const INFO_COMPETENCIAS_SIMPLES = { 1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 2: { nome: "Estrutura/Tema/Repertório", cor: "blue.500", bg: "blue.50" }, 3: { nome: "Argumentação", cor: "yellow.500", bg: "yellow.50" }, 4: { nome: "Coesão e coerência", cor: "green.500", bg: "green.50" }, };
+
+const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+const formatarTexto = (texto) => {
+    if (!texto) return '';
+    if (texto.includes('<p>') || texto.includes('<span')) return texto; 
+    return texto.replace(/\n/g, '<br />').replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/_(.*?)_/g, '<em>$1</em>').replace(/~(.*?)~/g, '<u>$1</u>');
 };
 
-const INFO_COMPETENCIAS_SIMPLES = { 
-  1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 
-  2: { nome: "Estrutura e atendimento ao tema", cor: "blue.500", bg: "blue.50" }, 
-  3: { nome: "Argumentação", cor: "yellow.500", bg: "yellow.50" }, 
-  4: { nome: "Coesão e coerência", cor: "green.500", bg: "green.50" }, 
+const getImagemUrl = (caminho) => {
+    if (!caminho) return '';
+    if (typeof caminho !== 'string') return '';
+    return caminho.startsWith('http') ? caminho : `http://127.0.0.1:8000${caminho}`;
 };
 
 const CustomPinSVG = ({ cor, numero }) => (
   <Box position="relative" w="30px" h="30px" color={cor} filter="drop-shadow(0px 3px 3px rgba(0,0,0,0.2))" transition="transform 0.2s" _hover={{ transform: 'scale(1.15)' }}>
-    <Icon viewBox="0 0 24 24" w="100%" h="100%">
-      <path fill="currentColor" d="M4 2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2z"/>
-    </Icon>
-    <Text position="absolute" top="4.5px" left="2px" w="100%" textAlign="center" color="white" fontSize="12px" fontWeight="900" fontFamily="system-ui">
-      {numero}
-    </Text>
+    <Icon viewBox="0 0 24 24" w="100%" h="100%"><path fill="currentColor" d="M4 2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2z"/></Icon>
+    <Text position="absolute" top="4.5px" left="2px" w="100%" textAlign="center" color="white" fontSize="12px" fontWeight="900" fontFamily="system-ui">{numero}</Text>
   </Box>
 );
 
-// MÁGICA DO SLA: Agora reconhece os VIPs e diminui a tolerância para 24h!
+const getPinTitle = (pin) => {
+    if (pin.competencia === 1 && pin.tipo_erro && pin.tipo_erro !== 'Geral') { return `Competência 1 - ${pin.tipo_erro}`; }
+    return `Competência ${pin.competencia}`;
+};
+
+const getCorretorNome = (r) => {
+    if (r.corretor_nome) return r.corretor_nome;
+    if (r.correcao?.corretor_nome) return r.correcao.corretor_nome;
+    if (r.correcao?.corretor?.first_name) return `${r.correcao.corretor.first_name} ${r.correcao.corretor.last_name || ''}`.trim();
+    if (r.correcao?.corretor_id || r.correcao?.corretor) return `ID: ${r.correcao.corretor_id || r.correcao.corretor}`;
+    if (r.corretor_atual) return `ID: ${r.corretor_atual}`;
+    return 'N/A';
+};
+
 const getSLA = (r) => { 
     if (!r || !r.data_envio) return { cor: 'gray', texto: '--', badge: 'gray' };
-    const data = new Date(r.data_envio);
-    const agora = new Date();
-    const diffHoras = (agora - data) / (1000 * 60 * 60);
-    
-    const isVip = r.is_urgente || r.vip_pago;
-    
-    // Regra Inteligente: VIPs estouram prazo em 24h. Normais em 72h.
-    const limiteAtraso = isVip ? 24 : 72;
-    const limiteAtencao = isVip ? 12 : 48;
-    
+    const data = new Date(r.data_envio); const agora = new Date(); const diffHoras = (agora - data) / (1000 * 60 * 60);
+    const isVip = r.is_urgente || r.vip_pago; const limiteAtraso = isVip ? 24 : 72; const limiteAtencao = isVip ? 12 : 48;
     if (diffHoras <= limiteAtencao) return { cor: 'green', texto: 'No Prazo', badge: 'green' }; 
     if (diffHoras <= limiteAtraso) return { cor: 'orange', texto: 'Atenção', badge: 'orange' }; 
     return { cor: 'red', texto: 'Atrasado', badge: 'red' }; 
+};
+
+const getStatusBadge = (status) => {
+    switch(status) {
+        case 'CORRIGIDA': return <Badge colorScheme="green" borderRadius="md" px={2} py={1} fontSize="xs">CORRIGIDA</Badge>;
+        case 'DEVOLVIDA': return <Badge colorScheme="orange" borderRadius="md" px={2} py={1} fontSize="xs">DEVOLVIDA (ALUNO)</Badge>;
+        case 'ANULADA': return <Badge colorScheme="red" borderRadius="md" px={2} py={1} fontSize="xs">ANULADA (ALUNO)</Badge>;
+        case 'REFAZER': return <Badge colorScheme="yellow" borderRadius="md" px={2} py={1} fontSize="xs">REFAZER (CORRETOR)</Badge>;
+        case 'EM_CORRECAO': return <Badge colorScheme="blue" borderRadius="md" px={2} py={1} fontSize="xs">EM CORREÇÃO</Badge>;
+        case 'EM_RECURSO': 
+        case 'RECURSO': return <Badge colorScheme="cyan" borderRadius="md" px={2} py={1} fontSize="xs">EM REVISÃO</Badge>;
+        case 'TRIAGEM': return <Badge colorScheme="pink" borderRadius="md" px={2} py={1} fontSize="xs">TRIAGEM TÉCNICA</Badge>;
+        case 'AUDITORIA':
+        case 'EM_AUDITORIA': return <Badge colorScheme="purple" borderRadius="md" px={2} py={1} fontSize="xs">EM AUDITORIA</Badge>;
+        case 'EM_QA': return <Badge colorScheme="teal" borderRadius="md" px={2} py={1} fontSize="xs">INSPEÇÃO QA</Badge>;
+        case 'FINALIZADA': return <Badge colorScheme="green" borderRadius="md" px={2} py={1} fontSize="xs">FINALIZADA (PAGA)</Badge>;
+        default: return <Badge colorScheme="gray" borderRadius="md" px={2} py={1} fontSize="xs">{status ? status.replace('_', ' ') : 'AGUARDANDO'}</Badge>;
+    }
 };
 
 function TorreControle() {
@@ -66,187 +87,268 @@ function TorreControle() {
   const [loading, setLoading] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('TODOS');
-  
   const [filtroSLA, setFiltroSLA] = useState('TODOS');
-  
+  const [filtroAuditoria, setFiltroAuditoria] = useState('TODOS');
+  const [filtroQA, setFiltroQA] = useState('TODOS'); 
+  const [filtroCorretorQA, setFiltroCorretorQA] = useState('TODOS'); 
+
+  const [periodoFiltro, setPeriodoFiltro] = useState('MES_ATUAL');
   const [dataInicioFila, setDataInicioFila] = useState('');
   const [dataFimFila, setDataFimFila] = useState('');
-
+  
   const [tabIndex, setTabIndex] = useState(0);
 
-  const [paginaAtualFila, setPaginaAtualFila] = useState(1);
-  const [itensPorPaginaFila, setItensPorPaginaFila] = useState(10);
-  const [paginaAtualAuditoria, setPaginaAtualAuditoria] = useState(1);
-  const [itensPorPaginaAuditoria, setItensPorPaginaAuditoria] = useState(10);
-  const [paginaAtualQA, setPaginaAtualQA] = useState(1);
-  const [itensPorPaginaQA, setItensPorPaginaQA] = useState(10);
+  const [paginaAtualFila, setPaginaAtualFila] = useState(1); const [itensPorPaginaFila, setItensPorPaginaFila] = useState(10);
+  const [paginaAtualAuditoria, setPaginaAtualAuditoria] = useState(1); const [itensPorPaginaAuditoria, setItensPorPaginaAuditoria] = useState(10);
+  const [paginaAtualTriagem, setPaginaAtualTriagem] = useState(1); const [itensPorPaginaTriagem, setItensPorPaginaTriagem] = useState(10);
+  const [paginaAtualQA, setPaginaAtualQA] = useState(1); const [itensPorPaginaQA, setItensPorPaginaQA] = useState(10);
 
   const modalAlerta = useDisclosure();
+  const modalProposta = useDisclosure();
   const [idParaLiberar, setIdParaLiberar] = useState(null);
 
   const [redacaoAuditando, setRedacaoAuditoria] = useState(null);
-  const [mensagemAluno, setMensagemAluno] = useState('');
-  const [mensagemCorretor, setMensagemCorretor] = useState('');
+  const [mensagemAcao1, setMensagemAcao1] = useState(''); 
+  const [mensagemAcao2, setMensagemAcao2] = useState(''); 
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [hoveredPinViewId, setHoveredPinViewId] = useState(null);
+  const [pinFocadoId, setPinFocadoId] = useState(null);
+  const [mostrarPins, setMostrarPins] = useState(true);
+  
+  const [notasEditadas, setNotasEditadas] = useState({});
+
+  useEffect(() => {
+      if (redacaoAuditando && redacaoAuditando.correcao) {
+          let initNotas = {};
+          (redacaoAuditando.correcao.competencias || []).forEach(c => { initNotas[c.comp] = c.nota; });
+          setNotasEditadas(initNotas);
+      }
+  }, [redacaoAuditando]);
 
   const carregarDados = async (silencioso = false) => {
     if (!silencioso) setLoading(true);
-    try { 
-      const res = await axios.get('http://127.0.0.1:8000/api/gestao/redacoes/', { 
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } 
-      }); 
-      setRedacoes(res.data); 
-    } catch (e) {
-      if(!silencioso) toast({ title: "Erro ao carregar fila", status: "error" });
-    }
+    try { const res = await axios.get('http://127.0.0.1:8000/api/gestao/redacoes/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); setRedacoes(res.data); } catch (e) { if(!silencioso) toast({ title: "Erro ao carregar fila", status: "error" }); }
     if (!silencioso) setLoading(false);
   };
 
-  useEffect(() => { 
-    carregarDados(); 
-    const interval = setInterval(() => { carregarDados(true); }, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => { 
-    setPaginaAtualFila(1); 
-  }, [busca, filtroStatus, filtroSLA, dataInicioFila, dataFimFila]);
+  useEffect(() => { carregarDados(); const interval = setInterval(() => { carregarDados(true); }, 10000); return () => clearInterval(interval); }, []);
+  useEffect(() => { setPaginaAtualFila(1); }, [busca, filtroStatus, filtroSLA, periodoFiltro, dataInicioFila, dataFimFila]);
+  useEffect(() => { setPaginaAtualAuditoria(1); }, [filtroAuditoria]);
+  useEffect(() => { setPaginaAtualQA(1); }, [filtroQA, filtroCorretorQA]);
 
   const abrirJulgamento = async (id) => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get(`http://127.0.0.1:8000/api/redacao/${id}/`, { headers: { Authorization: `Bearer ${token}` } });
-      setRedacaoAuditoria(res.data); setMensagemAluno(''); setMensagemCorretor('');
-    } catch (e) { toast({ title: 'Erro ao carregar os dados detalhados da redação.', status: 'error' }); }
+      let redData = res.data;
+      
+      try {
+          const temaId = redData.tema || redData.tema_id || (redData.tema_obj && redData.tema_obj.id);
+          if (temaId) {
+              const temaRes = await axios.get(`http://127.0.0.1:8000/api/temas/${temaId}/`, { headers: { Authorization: `Bearer ${token}` } });
+              redData.tema_completo = temaRes.data;
+          }
+      } catch (e) { console.log('Erro ao baixar tema', e); }
+
+      setRedacaoAuditoria(redData); 
+      setMensagemAcao1(''); 
+      setMensagemAcao2('');
+    } catch (e) { toast({ title: 'Erro ao carregar os dados detalhados.', status: 'error' }); }
   };
 
-  const resolverAuditoria = async (acao) => {
-    if (acao === 'DEVOLVER_ALUNO' && !mensagemAluno.trim()) return toast({ title: 'Atenção', description: 'Escreva um recado explicando o motivo para o aluno.', status: 'warning' });
-    if ((acao === 'EXIGIR_REFACAO' || acao === 'VOLTAR_FILA') && !mensagemCorretor.trim()) return toast({ title: 'Atenção', description: 'Escreva a mensagem pedagógica para orientar o corretor.', status: 'warning' });
-
+  const resolverAuditoria = async (acao, msgPayload) => {
+    if (!msgPayload.trim() && acao !== 'CONFIRMAR_FALHA_GRAVE' && acao !== 'FALSO_POSITIVO_QA') { return toast({ title: 'Atenção', description: 'Você deve preencher a mensagem explicativa antes de aplicar esta ação.', status: 'warning' }); }
     setLoadingAudit(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://127.0.0.1:8000/api/auditoria/${redacaoAuditando.id}/resolver/`, { acao: acao, mensagem: acao === 'DEVOLVER_ALUNO' ? mensagemAluno : mensagemCorretor }, { headers: { Authorization: `Bearer ${token}` } });
-      let msgSucesso = '';
-      if(acao === 'VOLTAR_FILA') msgSucesso = 'Falso Positivo registrado. A redação voltou para o corretor.';
-      if(acao === 'DEVOLVER_ALUNO') msgSucesso = 'Redação anulada e crédito devolvido ao aluno.';
-      if(acao === 'EXIGIR_REFACAO') msgSucesso = 'Redação enviada de volta para o professor refazer as notas!';
-      toast({ title: 'Resolvido!', description: msgSucesso, status: 'success' });
-      setRedacaoAuditoria(null); carregarDados(); 
+      await axios.post(`http://127.0.0.1:8000/api/auditoria/${redacaoAuditando.id}/resolver/`, { acao: acao, mensagem: msgPayload }, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: 'Ação aplicada com sucesso!', status: 'success' }); setRedacaoAuditoria(null); carregarDados(); 
+    } catch (e) { toast({ title: 'Erro ao aplicar o veredito.', status: 'error' }); }
+    setLoadingAudit(false);
+  };
+
+  const resolverAuditoriaEditandoNota = async (msgPayload, novasNotas) => {
+    if (!msgPayload.trim()) return toast({title: 'Atenção', description: 'Preencha a justificativa da edição.', status: 'warning'});
+    setLoadingAudit(true);
+    try {
+        const token = localStorage.getItem('token');
+        await axios.post(`http://127.0.0.1:8000/api/auditoria/${redacaoAuditando.id}/resolver/`, { 
+            acao: 'AJUSTAR_NOTA_PAGA', 
+            mensagem: msgPayload,
+            novas_notas: novasNotas
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        toast({ title: 'Nota ajustada e processo concluído!', status: 'success' }); 
+        setRedacaoAuditoria(null); 
+        carregarDados(); 
     } catch (e) { toast({ title: 'Erro ao aplicar o veredito.', status: 'error' }); }
     setLoadingAudit(false);
   };
 
   const confirmarLiberacao = (id) => { setIdParaLiberar(id); modalAlerta.onOpen(); };
+  const forcarLiberacaoReal = async () => { try { await axios.post(`http://127.0.0.1:8000/api/gestao/redacoes/${idParaLiberar}/liberar/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); carregarDados(true); toast({ title: "Redação devolvida para a fila com sucesso!", status: "success" }); } catch (e) {} modalAlerta.onClose(); };
+  const toggleUrgencia = async (r) => { if(r.vip_pago) return; try { await axios.post(`http://127.0.0.1:8000/api/gestao/redacoes/${r.id}/urgencia/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); carregarDados(true); toast({ title: "Prioridade alterada!", status: "success" }); } catch (e) {} };
   
-  const forcarLiberacaoReal = async () => {
-    try { 
-      await axios.post(`http://127.0.0.1:8000/api/gestao/redacoes/${idParaLiberar}/liberar/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
-      carregarDados(true); toast({ title: "Redação devolvida para a fila com sucesso!", status: "success" }); 
-    } catch (e) {}
-    modalAlerta.onClose();
-  };
-
-  const toggleUrgencia = async (r) => {
-    if(r.vip_pago) return; 
-    try { 
-      await axios.post(`http://127.0.0.1:8000/api/gestao/redacoes/${r.id}/urgencia/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
-      carregarDados(true); toast({ title: "Prioridade alterada!", status: "success" }); 
-    } catch (e) {}
-  };
-  
-  // ==============================================================================
-  // CÁLCULOS DO DASHBOARD (OS 6 INDICADORES ALINHADOS À ESQUERDA)
-  // ==============================================================================
   const statusConcluidos = ['CORRIGIDA', 'FINALIZADA', 'DEVOLVIDA', 'ANULADA'];
-
   const qtdAguardando = redacoes.filter(r => r.status === 'AGUARDANDO').length;
   const qtdEmCorrecao = redacoes.filter(r => r.status === 'EM_CORRECAO').length;
   const qtdCorrigidas = redacoes.filter(r => r.status === 'CORRIGIDA').length;
-  const qtdDevolvidas = redacoes.filter(r => r.status === 'DEVOLVIDA' || r.status === 'ANULADA').length;
-  
-  // VIPs que ainda não foram terminados
   const qtdVips = redacoes.filter(r => (r.is_urgente || r.vip_pago) && !statusConcluidos.includes(r.status)).length;
-  
-  // Atrasados: Usa o nosso novo motor inteligente de SLA
   const qtdAtrasados = redacoes.filter(r => getSLA(r).badge === 'red' && !statusConcluidos.includes(r.status)).length;
+  const qtdProblemas = redacoes.filter(r => r.status === 'EM_AUDITORIA' || r.status === 'EM_RECURSO' || r.status === 'RECURSO' || r.status === 'TRIAGEM').length;
 
+  const listaFilaNormal = redacoes.filter(r => {
+    return r.status !== 'EM_AUDITORIA' && r.status !== 'EM_RECURSO' && r.status !== 'RECURSO' && r.status !== 'TRIAGEM' && r.status !== 'EM_QA';
+  });
+  
+  const listaAuditoria = redacoes.filter(r => {
+      const isAuditoria = r.status === 'EM_AUDITORIA' || r.status === 'EM_RECURSO' || r.status === 'RECURSO';
+      const matchFiltro = filtroAuditoria === 'TODOS' ? true : filtroAuditoria === 'EM_RECURSO' ? (r.status === 'EM_RECURSO' || r.status === 'RECURSO') : r.status === filtroAuditoria;
+      return isAuditoria && matchFiltro;
+  });
 
-  // ==============================================================================
-  // FILTRAGEM E PAGINAÇÃO
-  // ==============================================================================
-  const listaFilaNormal = redacoes.filter(r => r.status !== 'AUDITORIA' && r.status !== 'EM_QA');
-  const listaAuditoria = redacoes.filter(r => r.status === 'AUDITORIA');
-  const listaQA = redacoes.filter(r => r.status === 'EM_QA');
+  const listaTriagem = redacoes.filter(r => r.status === 'TRIAGEM');
+  
+  const listaQA = redacoes.filter(r => {
+      if (r.status !== 'EM_QA') return false;
+      const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
+      const isMaAvaliacao = r.correcao?.avaliacao_aluno > 0;
+      const isAmostragem = !isMaAvaliacao;
+      
+      const corretorNomeStr = getCorretorNome(r);
+      const matchCorretor = filtroCorretorQA === 'TODOS' ? true : (corretorNomeStr === filtroCorretorQA);
+
+      if(filtroQA === 'PAGAS' && !isPaga) return false;
+      if(filtroQA === 'MA_AVALIACAO' && !isMaAvaliacao) return false;
+      if(filtroQA === 'AMOSTRAGEM' && !isAmostragem) return false;
+      
+      return matchCorretor;
+  });
+  
+  const corretoresQAUnicos = Array.from(new Set(redacoes.filter(r => r.status === 'EM_QA').map(r => getCorretorNome(r)).filter(n => n !== 'N/A')));
 
   const redacoesFiltradas = listaFilaNormal.filter(r => {
     const termoBusca = busca.toLowerCase();
-    const matchTexto = (r.tema_titulo || '').toLowerCase().includes(termoBusca) || 
-                       (r.aluno_nome || '').toLowerCase().includes(termoBusca) || 
-                       (r.corretor_nome || '').toLowerCase().includes(termoBusca) ||
-                       r.id.toString() === busca;
-                       
-    const matchStatus = filtroStatus === 'TODOS' ? true : 
-                        filtroStatus === 'DEVOLVIDA' ? (r.status === 'DEVOLVIDA' || r.status === 'ANULADA') :
-                        r.status === filtroStatus;
+    const matchTexto = (r.tema_titulo || '').toLowerCase().includes(termoBusca) || (r.aluno_nome || '').toLowerCase().includes(termoBusca) || (getCorretorNome(r) || '').toLowerCase().includes(termoBusca) || r.id.toString() === busca;
     
+    let matchStatus = true;
+    if (filtroStatus === 'PRESAS') {
+        matchStatus = (r.status === 'EM_CORRECAO' || r.status === 'REFAZER') && r.corretor_atual !== null;
+    } else if (filtroStatus !== 'TODOS') {
+        matchStatus = r.status === filtroStatus;
+    }
+
     let matchData = true;
-    if (dataInicioFila || dataFimFila) {
-        const dataEnvio = new Date(r.data_envio);
-        const dInicio = dataInicioFila ? new Date(dataInicioFila + 'T00:00:00') : new Date('2000-01-01');
-        const dFim = dataFimFila ? new Date(dataFimFila + 'T23:59:59') : new Date('2100-01-01');
+    const dataEnvio = new Date(r.data_envio);
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+    if (periodoFiltro === 'HOJE') {
+        matchData = dataEnvio >= hoje;
+    } else if (periodoFiltro === 'ONTEM') {
+        const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1);
+        const hojeFim = new Date(hoje);
+        matchData = dataEnvio >= ontem && dataEnvio < hojeFim;
+    } else if (periodoFiltro === 'MES_ATUAL') {
+        matchData = dataEnvio.getMonth() === hoje.getMonth() && dataEnvio.getFullYear() === hoje.getFullYear();
+    } else if (periodoFiltro === 'MES_ANTERIOR') {
+        const mesAnterior = new Date(hoje); mesAnterior.setMonth(mesAnterior.getMonth() - 1);
+        matchData = dataEnvio.getMonth() === mesAnterior.getMonth() && dataEnvio.getFullYear() === mesAnterior.getFullYear();
+    } else if (periodoFiltro === 'PERSONALIZADO' && (dataInicioFila || dataFimFila)) {
+        const dInicio = dataInicioFila ? new Date(dataInicioFila + 'T00:00:00') : new Date('2000-01-01'); 
+        const dFim = dataFimFila ? new Date(dataFimFila + 'T23:59:59') : new Date('2100-01-01'); 
         matchData = dataEnvio >= dInicio && dataEnvio <= dFim;
     }
 
     let matchSLA = true;
-    if (filtroSLA === 'VIP') matchSLA = r.vip_pago;
-    if (filtroSLA === 'URGENTE') matchSLA = r.is_urgente;
-    if (filtroSLA === 'ATRASADO') matchSLA = getSLA(r).badge === 'red';
-
+    if (filtroSLA === 'VIP') matchSLA = r.vip_pago; if (filtroSLA === 'URGENTE') matchSLA = r.is_urgente; if (filtroSLA === 'ATRASADO') matchSLA = getSLA(r).badge === 'red';
+    
     return matchTexto && matchStatus && matchData && matchSLA;
   });
 
-  const idxUltimoFila = paginaAtualFila * itensPorPaginaFila; const idxPrimeiroFila = idxUltimoFila - itensPorPaginaFila;
-  const filaPaginada = redacoesFiltradas.slice(idxPrimeiroFila, idxUltimoFila);
+  const idxUltimoFila = paginaAtualFila * itensPorPaginaFila; const idxPrimeiroFila = idxUltimoFila - itensPorPaginaFila; const filaPaginada = redacoesFiltradas.slice(idxPrimeiroFila, idxUltimoFila);
+  const idxUltimoAuditoria = paginaAtualAuditoria * itensPorPaginaAuditoria; const idxPrimeiroAuditoria = idxUltimoAuditoria - itensPorPaginaAuditoria; const auditoriaPaginada = listaAuditoria.slice(idxPrimeiroAuditoria, idxUltimoAuditoria);
+  const idxUltimoTriagem = paginaAtualTriagem * itensPorPaginaTriagem; const idxPrimeiroTriagem = idxUltimoTriagem - itensPorPaginaTriagem; const triagemPaginada = listaTriagem.slice(idxPrimeiroTriagem, idxUltimoTriagem);
+  const idxUltimoQA = paginaAtualQA * itensPorPaginaQA; const idxPrimeiroQA = idxUltimoQA - itensPorPaginaQA; const qaPaginada = listaQA.slice(idxPrimeiroQA, idxUltimoQA);
 
-  const idxUltimoAuditoria = paginaAtualAuditoria * itensPorPaginaAuditoria; const idxPrimeiroAuditoria = idxUltimoAuditoria - itensPorPaginaAuditoria;
-  const auditoriaPaginada = listaAuditoria.slice(idxPrimeiroAuditoria, idxUltimoAuditoria);
-
-  const idxUltimoQA = paginaAtualQA * itensPorPaginaQA; const idxPrimeiroQA = idxUltimoQA - itensPorPaginaQA;
-  const qaPaginada = listaQA.slice(idxPrimeiroQA, idxUltimoQA);
-
-  // ==============================================================================
-  // RENDERIZAÇÃO MODO 1: WORKSPACE DE JULGAMENTO (O RAIO-X)
-  // ==============================================================================
   if (redacaoAuditando) {
     const isSimples = redacaoAuditando.tema_tipo?.toUpperCase() === 'SIMPLES' || redacaoAuditando.tipo?.toUpperCase() === 'SIMPLES';
     const temCorrecaoFeita = redacaoAuditando.correcao && redacaoAuditando.correcao.competencias && redacaoAuditando.correcao.competencias.length > 0;
-    const isAnaliseQA = redacaoAuditando.status === 'EM_QA' || redacaoAuditando.status === 'CORRIGIDA'; 
+    
+    const isQA = redacaoAuditando.status === 'EM_QA' || redacaoAuditando.status === 'CORRIGIDA'; 
+    const isFalhaGrave = redacaoAuditando.status === 'EM_AUDITORIA';
+    const isRecurso = redacaoAuditando.status === 'EM_RECURSO' || redacaoAuditando.status === 'RECURSO';
+    const isTriagem = redacaoAuditando.status === 'TRIAGEM';
+    
+    const isPaga = redacaoAuditando.foi_pago === true || String(redacaoAuditando.foi_pago).toLowerCase() === 'true';
+    const avaliacaoEstrelas = redacaoAuditando.correcao?.avaliacao_aluno || 0;
+    const avaliacaoTexto = redacaoAuditando.correcao?.comentario_avaliacao || '';
+    
+    const notasPossiveisEdit = isSimples ? [0,5,10,15,20,25] : [0,40,80,120,160,200];
+    const compsDisponiveisEdit = isSimples ? [1,2,3,4] : [1,2,3,4,5];
+    const notaFinalCalculadaEdit = Object.values(notasEditadas).reduce((acc, curr) => acc + Number(curr), 0);
+
+    const motivadoresTema = redacaoAuditando.tema_completo?.motivadores || [];
+    const descricaoProposta = redacaoAuditando.tema_completo?.descricao || '';
 
     return (
       <Flex h="100vh" overflow="hidden" w="full" bg="gray.100">
         <Box flex="1" display="flex" flexDirection="column" bg="gray.200">
-          <Flex w="full" h="90px" px={8} bg="white" shadow="sm" justify="space-between" align="center" borderBottom="1px solid" borderColor="gray.300" zIndex={10}>
-            <Button leftIcon={<ArrowBackIcon />} onClick={() => setRedacaoAuditoria(null)} colorScheme="gray" variant="solid" shadow="sm">Voltar para a Torre</Button>
+          
+          <Flex w="full" h="90px" px={8} bg="white" shadow="sm" justify="space-between" align="center" borderBottom="1px solid" borderColor="gray.300" zIndex={10} wrap="nowrap">
             <HStack spacing={4}>
-              <Badge bg={isSimples ? 'blue.50' : 'green.50'} color={isSimples ? 'blue.700' : 'green.700'} px={4} py={2} borderRadius="md" fontSize="md">{redacaoAuditando.tema_tipo || redacaoAuditando.tipo || 'ENEM'}</Badge>
-              <Badge colorScheme={isAnaliseQA ? "purple" : "orange"} fontSize="md" px={4} py={2} borderRadius="md" shadow="sm" display="flex" alignItems="center" gap={2}>
-                {isAnaliseQA ? <><StarIcon /> Inspeção de Qualidade (QA)</> : <><WarningTwoIcon /> Julgamento de Triagem</>}
-              </Badge>
+                <Button leftIcon={<ArrowBackIcon />} onClick={() => setRedacaoAuditoria(null)} colorScheme="gray" variant="solid" shadow="sm">Voltar</Button>
+                <Button size="sm" onClick={() => setMostrarPins(!mostrarPins)} leftIcon={<Icon as={mostrarPins ? ViewOffIcon : ViewIcon} />} colorScheme="gray" variant="outline" shadow="sm">
+                    {mostrarPins ? "Ocultar Marcações" : "Mostrar Marcações"}
+                </Button>
+                <Button size="sm" colorScheme="blue" variant="outline" leftIcon={<InfoIcon />} onClick={modalProposta.onOpen} shadow="sm">
+                    Ver Proposta
+                </Button>
+            </HStack>
+            <HStack spacing={4}>
+                <Badge bg={isSimples ? 'blue.50' : 'green.50'} color={isSimples ? 'blue.700' : 'green.700'} px={4} py={2} borderRadius="md" fontSize="md">{redacaoAuditando.tema_tipo || redacaoAuditando.tipo || 'ENEM'}</Badge>
             </HStack>
           </Flex>
 
           <Box flex="1" overflowY="auto" p={8} display="flex" justifyContent="center">
-            <Box position="relative" display="inline-block" height="fit-content" boxShadow="dark-lg" bg="white" border="1px solid" borderColor="gray.300" borderRadius="sm" w={redacaoAuditando.texto ? "700px" : "full"} maxW={redacaoAuditando.texto ? "700px" : "900px"} flexShrink={redacaoAuditando.texto ? 0 : 1}>
-              {redacaoAuditando.texto ? ( <Box p="8px 30px" whiteSpace="pre-wrap" fontFamily="Arial, sans-serif" fontSize="16px" lineHeight="40px" color="gray.800" minHeight="1216px" bgImage="linear-gradient(transparent 39px, #ccc 40px)" bgSize="100% 40px">{redacaoAuditando.texto}</Box> ) : ( <Image src={redacaoAuditando.arquivo} alt="Redação do Aluno" display="block" w="100%" h="auto" /> )}
-              {redacaoAuditando.correcao?.anotacoes?.map((pin) => { 
-                if(!pin.x) return null; const info = isSimples ? INFO_COMPETENCIAS_SIMPLES[pin.competencia] : INFO_COMPETENCIAS_ENEM[pin.competencia]; if(!info) return null; const isHovered = hoveredPinViewId === pin.id; 
+            <Box position="relative" display="inline-block" height="fit-content" boxShadow="dark-lg" bg="white" border="1px solid" borderColor="gray.300" borderRadius="sm" w={redacaoAuditando.texto ? "700px" : "full"} maxW={redacaoAuditando.texto ? "700px" : "900px"} flexShrink={redacaoAuditando.texto ? 0 : 1} onClick={() => setPinFocadoId(null)}>
+              {redacaoAuditando.texto ? ( 
+                  <Box p="0" position="relative" minHeight="1216px" bgImage="linear-gradient(transparent 39px, #ccc 40px)" bgSize="100% 40px">
+                      <Box position="absolute" left={0} top={0} bottom={0} w="40px" borderRight="1px solid #ccc" bg="gray.50" pt="8px" pointerEvents="none" zIndex={2}>
+                          {Array.from({length: 30}).map((_, i) => (
+                              <Text key={i} h="40px" lineHeight="40px" textAlign="center" fontSize="12px" color="gray.400" fontWeight="bold" m={0} p={0}>{i + 1}</Text>
+                          ))}
+                      </Box>
+                      <Box pl="55px" pr="20px" pt="8px" pb="8px" whiteSpace="pre-wrap" fontFamily="Arial, sans-serif" fontSize="16px" lineHeight="40px" color="gray.800">
+                          {redacaoAuditando.texto}
+                      </Box>
+                  </Box>
+              ) : ( <Image src={getImagemUrl(redacaoAuditando.arquivo)} alt="Redação do Aluno" display="block" w="100%" h="auto" /> )}
+              
+              {mostrarPins && redacaoAuditando.correcao?.anotacoes?.map((pin) => { 
+                if(!pin.x) return null; const info = isSimples ? INFO_COMPETENCIAS_SIMPLES[pin.competencia] : INFO_COMPETENCIAS_ENEM[pin.competencia]; if(!info) return null; 
+                
+                const isHovered = hoveredPinViewId === pin.id; 
+                const isFocused = pinFocadoId === pin.id;
+                const isOtherFocused = pinFocadoId !== null && pinFocadoId !== pin.id;
+
+                if (isOtherFocused) return null;
+
                 return (
                   <Box key={pin.id}>
-                    <Box position="absolute" left={`${pin.x}%`} top={`${pin.y}%`} w={`${pin.width}%`} h={`${pin.height}%`} bg={info.cor} opacity={isHovered ? 0.4 : 0} pointerEvents="none" transition="opacity 0.2s" zIndex={4} />
-                    <Popover trigger="hover" placement="top" openDelay={0} isLazy><PopoverTrigger><Box position="absolute" left={`calc(${pin.x}% + ${pin.width}% - 6px)`} top={`calc(${pin.y}% - 28px)`} cursor="pointer" zIndex={10} display="flex" alignItems="center" justifyContent="center" onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}><CustomPinSVG cor={info.cor} numero={pin.competencia} /></Box></PopoverTrigger><Portal><PopoverContent zIndex={9999} w="300px" boxShadow="2xl" borderRadius="2xl" overflow="hidden" border="1px solid" borderColor="gray.100" onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}><PopoverArrow bg={info.bg} /><PopoverHeader bg={info.bg} fontWeight="bold" color={info.cor} borderBottom="none" fontSize="sm">{pin.tipo_erro || info.nome}</PopoverHeader><PopoverBody fontSize="sm" bg="white">{pin.tipo_erro && pin.tipo_erro !== 'Geral' && <Badge colorScheme="red" mb={2}>{pin.tipo_erro}</Badge>}<Text color="gray.700">{pin.texto}</Text></PopoverBody></PopoverContent></Portal></Popover>
+                    <Box position="absolute" left={`${pin.x}%`} top={`${pin.y}%`} w={`${pin.width}%`} h={`${pin.height}%`} bg={info.cor} opacity={isHovered || isFocused ? 0.4 : 0} pointerEvents="none" transition="opacity 0.2s" zIndex={4} />
+                    {!isFocused && (
+                        <Popover trigger="hover" placement="top" openDelay={0} isLazy>
+                            <PopoverTrigger>
+                                <Box position="absolute" left={`calc(${pin.x}% + ${pin.width}% - 6px)`} top={`calc(${pin.y}% - 28px)`} cursor="pointer" zIndex={10} display="flex" alignItems="center" justifyContent="center" onClick={(e) => { e.stopPropagation(); setPinFocadoId(pin.id); }} onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}><CustomPinSVG cor={info.cor} numero={pin.competencia} /></Box>
+                            </PopoverTrigger>
+                            <Portal>
+                                <PopoverContent zIndex={9999} w="300px" boxShadow="2xl" borderRadius="2xl" overflow="hidden" border="1px solid" borderColor="gray.100" onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}>
+                                    <PopoverArrow bg={info.bg} />
+                                    <PopoverHeader bg={info.bg} fontWeight="bold" color={info.cor} borderBottom="none" fontSize="sm">{getPinTitle(pin)}</PopoverHeader>
+                                    <PopoverBody fontSize="sm" bg="white"><Text color="gray.700">{pin.texto}</Text></PopoverBody>
+                                </PopoverContent>
+                            </Portal>
+                        </Popover>
+                    )}
                   </Box>
                 ); 
               })}
@@ -255,9 +357,15 @@ function TorreControle() {
         </Box>
 
         <Box w="450px" bg="white" borderLeft="1px solid" borderColor="gray.300" display="flex" flexDirection="column" shadow="2xl" zIndex={10}>
-          <Flex h="90px" px={6} direction="column" justify="center" borderBottom="1px solid" borderColor={isAnaliseQA ? "purple.200" : "orange.200"} bg={isAnaliseQA ? "purple.50" : "orange.50"}>
-            <Heading size="md" color={isAnaliseQA ? "purple.700" : "orange.700"} mb={1}>{isAnaliseQA ? 'Controle de Qualidade' : 'Tribunal de Auditoria'}</Heading>
-            <Text fontSize="sm" color={isAnaliseQA ? "purple.600" : "orange.600"}>{isAnaliseQA ? 'Inspecione as notas do corretor.' : 'Analise a triagem do corretor.'}</Text>
+          <Flex h="90px" px={6} direction="column" justify="center" borderBottom="1px solid" 
+                borderColor={isQA ? "purple.200" : isFalhaGrave ? "red.200" : isRecurso ? "blue.200" : "orange.200"} 
+                bg={isQA ? "purple.50" : isFalhaGrave ? "red.50" : isRecurso ? "blue.50" : "orange.50"}>
+            <Heading size="md" color={isQA ? "purple.700" : isFalhaGrave ? "red.700" : isRecurso ? "blue.700" : "orange.700"} mb={1}>
+                {isQA ? 'Controle de Qualidade' : isFalhaGrave ? 'Julgamento de Falha Grave' : isRecurso ? 'Julgamento de Recurso' : 'Triagem Técnica'}
+            </Heading>
+            <Text fontSize="sm" color={isQA ? "purple.600" : isFalhaGrave ? "red.600" : isRecurso ? "blue.600" : "orange.600"}>
+                {isQA ? 'Inspecione a correção.' : isFalhaGrave ? 'Analise o problema pedagógico relatado.' : isRecurso ? 'O aluno contestou a nota do corretor.' : 'Analise o problema técnico relatado.'}
+            </Text>
           </Flex>
 
           <Box flex="1" overflowY="auto" p={6}>
@@ -267,10 +375,22 @@ function TorreControle() {
                 <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Tema</Text><Text fontSize="sm" color="gray.700" fontWeight="bold">{redacaoAuditando.tema_titulo}</Text>
               </Box>
 
-              {!isAnaliseQA && (
-                <Alert status="error" variant="left-accent" borderRadius="md" flexDirection="column" alignItems="start" p={4} bg="red.50" border="1px solid" borderColor="red.100">
-                  <HStack mb={2}><WarningIcon color="red.500" /><Text fontWeight="bold" fontSize="sm" color="red.800">Alerta Original (Motivo):</Text></HStack>
-                  <Text fontSize="sm" color="red.700" w="full" fontStyle="italic" whiteSpace="pre-wrap">"{redacaoAuditando.correcao?.comentario_geral || 'Nenhum detalhe fornecido.'}"</Text>
+              {isQA && avaliacaoEstrelas > 0 && (
+                <Box p={4} bg="yellow.50" borderRadius="md" border="1px solid" borderColor="yellow.300">
+                    <Text fontSize="xs" fontWeight="900" color="yellow.700" textTransform="uppercase" mb={1}>Avaliação do Aluno</Text>
+                    <HStack mb={2}>
+                        {[1,2,3,4,5].map(estrela => (
+                            <Icon key={estrela} as={StarIcon} color={estrela <= avaliacaoEstrelas ? "yellow.400" : "gray.300"} />
+                        ))}
+                    </HStack>
+                    {avaliacaoTexto && <Text fontSize="sm" color="gray.700" fontStyle="italic">"{avaliacaoTexto}"</Text>}
+                </Box>
+              )}
+
+              {!isQA && (
+                <Alert status={isRecurso ? "info" : "warning"} variant="left-accent" borderRadius="md" flexDirection="column" alignItems="start" p={4} border="1px solid" borderColor={isRecurso ? "blue.100" : "orange.100"}>
+                  <HStack mb={2}><WarningIcon color={isRecurso ? "blue.500" : "orange.500"} /><Text fontWeight="bold" fontSize="sm" color={isRecurso ? "blue.800" : "orange.800"}>{isRecurso ? "Mensagem do Aluno (Recurso):" : "Alerta do Corretor:"}</Text></HStack>
+                  <Text fontSize="sm" color={isRecurso ? "blue.700" : "orange.700"} w="full" fontStyle="italic" whiteSpace="pre-wrap">"{redacaoAuditando.correcao?.comentario_geral || 'Sem detalhes fornecidos.'}"</Text>
                 </Alert>
               )}
 
@@ -282,7 +402,10 @@ function TorreControle() {
                       const info = isSimples ? INFO_COMPETENCIAS_SIMPLES[comp.comp] : INFO_COMPETENCIAS_ENEM[comp.comp]; if(!info) return null; 
                       return (
                         <Box key={comp.comp} p={3} border="1px solid" borderColor="gray.200" borderRadius="md" bg="white">
-                          <Flex justify="space-between" mb={1} align="center"><Badge bg={info.bg} color={info.cor} fontSize="2xs">Comp {comp.comp}</Badge><Text fontWeight="bold" fontSize="sm" color="gray.700">{comp.nota} pts</Text></Flex>
+                          <Flex justify="space-between" mb={1} align="center">
+                              <Badge bg={info.bg} color={info.cor} fontSize="xs" textTransform="uppercase" fontWeight="bold">COMPETÊNCIA {comp.comp}</Badge>
+                              <Text fontWeight="bold" fontSize="sm" color="gray.700">{comp.nota} pts</Text>
+                          </Flex>
                           <Text fontSize="xs" fontWeight="bold" color="gray.800" mb={2}>{info.nome}</Text>
                           {comp.comentario && <Text fontSize="xs" color="gray.600" bg="gray.50" p={2} borderRadius="sm" fontStyle="italic" whiteSpace="pre-wrap">"{comp.comentario}"</Text>}
                         </Box>
@@ -294,39 +417,150 @@ function TorreControle() {
 
               <Divider borderColor="gray.300" />
 
-              {isAnaliseQA ? (
-                <Box p={4} border="1px solid" borderColor="purple.200" borderRadius="xl" bg="purple.50">
-                  <HStack mb={2}><Icon as={EditIcon} color="purple.600" /><Text fontSize="sm" fontWeight="bold" color="purple.700">O Corretor Errou (Exigir Refação)</Text></HStack>
-                  <Text fontSize="xs" color="purple.600" mb={3}>O corretor receberá um alerta para consertar as notas antes de ganhar por esta redação.</Text>
-                  <Textarea size="sm" value={mensagemCorretor} onChange={(e) => setMensagemCorretor(e.target.value)} rows={4} bg="white" placeholder="Ex: Professor, você tirou 40pts na C1 mas o aluno não cometeu erro na linha 15..." mb={3} />
-                  <Button w="full" colorScheme="purple" onClick={() => resolverAuditoria('EXIGIR_REFACAO')} isLoading={loadingAudit}>Devolver para Refação</Button>
-                </Box>
-              ) : (
+              {isFalhaGrave && (
                 <VStack align="stretch" spacing={4}>
-                  <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.100">
-                    <HStack mb={2}><CheckCircleIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">1. Falso Positivo (Mandá-lo Corrigir)</Text></HStack>
-                    <Text fontSize="xs" color="gray.600" mb={3}>A redação está nítida. Devolva ao corretor orientando-o a corrigir o texto.</Text>
-                    <Textarea size="sm" value={mensagemCorretor} onChange={(e) => setMensagemCorretor(e.target.value)} rows={3} bg="white" placeholder="Ex: Professor, a imagem tem sombra mas dá para ler. Prossiga com a correção." mb={3} />
-                    <Button w="full" colorScheme="gray" bg="white" border="1px solid" borderColor="gray.300" onClick={() => resolverAuditoria('VOLTAR_FILA')} isLoading={loadingAudit}>Devolver ao Corretor</Button>
-                  </Box>
                   <Box p={4} border="1px solid" borderColor="red.200" borderRadius="xl" bg="red.50">
-                    <HStack mb={2}><WarningIcon color="red.600" /><Text fontSize="sm" fontWeight="bold" color="red.700">2. A redação é inválida (Anular)</Text></HStack>
-                    <Text fontSize="xs" color="red.600" mb={3}>A redação é cancelada, e o aluno recebe o crédito de volta no sistema.</Text>
-                    <Textarea size="sm" value={mensagemAluno} onChange={(e) => setMensagemAluno(e.target.value)} rows={3} bg="white" placeholder="Recado para o aluno. Ex: Texto ilegível, envie nova foto." mb={3} />
-                    <Button w="full" colorScheme="red" onClick={() => resolverAuditoria('DEVOLVER_ALUNO')} isLoading={loadingAudit}>Anular e Estornar Crédito</Button>
+                    <HStack mb={2}><CheckCircleIcon color="red.600" /><Text fontSize="sm" fontWeight="bold" color="red.700">1. Confirmar Falha Grave (Zerar)</Text></HStack>
+                    <Text fontSize="xs" color="red.600" mb={3}>A redação será zerada, o aluno perde o crédito e o corretor é pago.</Text>
+                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justificativa do zero (opcional)..." mb={3} />
+                    <Button w="full" colorScheme="red" onClick={() => resolverAuditoria('CONFIRMAR_FALHA_GRAVE', mensagemAcao1)} isLoading={loadingAudit}>Confirmar e Zerar Redação</Button>
+                  </Box>
+                  <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
+                    <HStack mb={2}><WarningIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">2. Falso Positivo (Discordar)</Text></HStack>
+                    <Text fontSize="xs" color="gray.600" mb={3}>Devolve a redação para o corretor fazer a correção normal.</Text>
+                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Explique ao corretor porque não é falha grave..." mb={3} />
+                    <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('DEVOLVER_CORRETOR', mensagemAcao2)} isLoading={loadingAudit}>Devolver ao Corretor</Button>
                   </Box>
                 </VStack>
               )}
+
+              {isTriagem && (
+                <VStack align="stretch" spacing={4}>
+                  <Box p={4} border="1px solid" borderColor="orange.200" borderRadius="xl" bg="orange.50">
+                    <HStack mb={2}><WarningTwoIcon color="orange.600" /><Text fontSize="sm" fontWeight="bold" color="orange.700">1. Problema Confirmado (Anular)</Text></HStack>
+                    <Text fontSize="xs" color="orange.600" mb={3}>A redação é cancelada, e o aluno recebe o crédito de volta no sistema.</Text>
+                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Recado para o aluno. Ex: Texto ilegível, envie nova foto." mb={3} />
+                    <Button w="full" colorScheme="orange" onClick={() => resolverAuditoria('ANULAR_E_DEVOLVER_CREDITO', mensagemAcao1)} isLoading={loadingAudit}>Anular e Estornar Crédito</Button>
+                  </Box>
+                  <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
+                    <HStack mb={2}><CheckCircleIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">2. Falso Positivo (Dá para ler)</Text></HStack>
+                    <Text fontSize="xs" color="gray.600" mb={3}>A redação está nítida ou válida. Devolva ao corretor orientando-o a corrigir.</Text>
+                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Ex: Professor, a imagem tem sombra mas dá para ler." mb={3} />
+                    <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('DEVOLVER_CORRETOR', mensagemAcao2)} isLoading={loadingAudit}>Devolver ao Corretor</Button>
+                  </Box>
+                </VStack>
+              )}
+
+              {isRecurso && (
+                <VStack align="stretch" spacing={4}>
+                  <Box p={4} border="1px solid" borderColor="blue.200" borderRadius="xl" bg="blue.50">
+                    <HStack mb={2}><CheckCircleIcon color="blue.600" /><Text fontSize="sm" fontWeight="bold" color="blue.700">1. Negar Recurso (Manter Nota)</Text></HStack>
+                    <Text fontSize="xs" color="blue.600" mb={3}>Você defende a correção original. A nota do aluno será mantida.</Text>
+                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justificativa pedagógica para o aluno aceitar a nota..." mb={3} />
+                    <Button w="full" colorScheme="blue" onClick={() => resolverAuditoria('RECURSO_NEGADO', mensagemAcao1)} isLoading={loadingAudit}>Manter Nota do Corretor</Button>
+                  </Box>
+                  <Box p={4} border="1px solid" borderColor="purple.200" borderRadius="xl" bg="purple.50">
+                    <HStack mb={2}><EditIcon color="purple.600" /><Text fontSize="sm" fontWeight="bold" color="purple.700">2. Aceitar Recurso (Corretor Errou)</Text></HStack>
+                    <Text fontSize="xs" color="purple.600" mb={3}>Devolve a redação ao corretor para que ele ajuste as notas conforme a sua instrução.</Text>
+                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Ex: Professor, ajuste a C3, pois o aluno trouxe repertório válido..." mb={3} />
+                    <Button w="full" colorScheme="purple" onClick={() => resolverAuditoria('RECURSO_ACEITE', mensagemAcao2)} isLoading={loadingAudit}>Exigir Refação do Corretor</Button>
+                  </Box>
+                </VStack>
+              )}
+
+              {isQA && !isPaga && (
+                <VStack align="stretch" spacing={4}>
+                    <Box p={4} border="1px solid" borderColor="purple.200" borderRadius="xl" bg="purple.50">
+                      <HStack mb={2}><Icon as={EditIcon} color="purple.600" /><Text fontSize="sm" fontWeight="bold" color="purple.700">O Corretor Errou (Exigir Refação)</Text></HStack>
+                      <Text fontSize="xs" color="purple.600" mb={3}>O corretor receberá um alerta para consertar as notas antes de ganhar por esta redação.</Text>
+                      <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={4} bg="white" placeholder="Ex: Professor, você tirou 40pts na C1 mas o aluno não cometeu erro na linha 15..." mb={3} />
+                      <Button w="full" colorScheme="purple" onClick={() => resolverAuditoria('EXIGIR_REFACAO', mensagemAcao1)} isLoading={loadingAudit}>Devolver para Refação</Button>
+                    </Box>
+
+                    {avaliacaoEstrelas > 0 && (
+                        <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
+                          <HStack mb={2}><CheckCircleIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">Falso Positivo (Avaliação Injusta)</Text></HStack>
+                          <Text fontSize="xs" color="gray.600" mb={3}>O corretor corrigiu corretamente. Ignore a má avaliação do aluno e encerre o QA.</Text>
+                          <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('FALSO_POSITIVO_QA', 'Avaliação do aluno foi considerada injusta. Nenhuma punição aplicada ao corretor.')} isLoading={loadingAudit}>Ignorar Má Avaliação</Button>
+                        </Box>
+                    )}
+                </VStack>
+              )}
+              
+              {isQA && isPaga && (
+                <VStack align="stretch" spacing={4}>
+                  <Alert status="warning" borderRadius="md"><AlertIcon/><Box><Text fontWeight="bold" fontSize="sm">Redação Já Paga</Text><Text fontSize="xs">O corretor já recebeu por esta redação. A nota não pode voltar para ele e deve ser editada diretamente aqui.</Text></Box></Alert>
+                  <Box p={4} border="1px solid" borderColor="green.200" borderRadius="xl" bg="green.50">
+                      <HStack mb={2}><Icon as={EditIcon} color="green.600" /><Text fontSize="sm" fontWeight="bold" color="green.700">Ajustar Nota Diretamente</Text></HStack>
+                      <Text fontSize="xs" color="green.700" mb={4}>Altere os valores abaixo. O corretor será notificado da penalidade, e a nota do aluno será atualizada.</Text>
+                      
+                      <SimpleGrid columns={2} spacing={3} mb={4}>
+                          {compsDisponiveisEdit.map(cNum => (
+                              <Box key={cNum} bg="white" p={2} borderRadius="md" border="1px solid" borderColor="green.200" shadow="sm">
+                                  <Text fontSize="2xs" fontWeight="bold" color="green.700" mb={1}>COMPETÊNCIA {cNum}</Text>
+                                  <Select size="sm" bg="gray.50" value={notasEditadas[cNum] || 0} onChange={(e) => setNotasEditadas({...notasEditadas, [cNum]: Number(e.target.value)})}>
+                                      {notasPossiveisEdit.map(n => <option key={n} value={n}>{n} pts</option>)}
+                                  </Select>
+                              </Box>
+                          ))}
+                      </SimpleGrid>
+
+                      <Flex justify="space-between" align="center" mb={4} p={3} bg="white" borderRadius="md" border="1px solid" borderColor="green.300" shadow="sm">
+                          <Text fontSize="sm" fontWeight="bold" color="green.800">Nova Nota Final:</Text>
+                          <Badge colorScheme="green" fontSize="lg" px={3} py={1} borderRadius="md">{notaFinalCalculadaEdit} pts</Badge>
+                      </Flex>
+
+                      <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justifique a alteração da nota e a punição..." mb={3} />
+                      <Button w="full" colorScheme="green" onClick={() => resolverAuditoriaEditandoNota(mensagemAcao1, notasEditadas)} isLoading={loadingAudit}>Confirmar Edição de Nota</Button>
+                  </Box>
+                  
+                  {avaliacaoEstrelas > 0 && (
+                      <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
+                        <HStack mb={2}><CheckCircleIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">Falso Positivo (Avaliação Injusta)</Text></HStack>
+                        <Text fontSize="xs" color="gray.600" mb={3}>O corretor corrigiu corretamente. Ignore a má avaliação do aluno e encerre o QA.</Text>
+                        <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('FALSO_POSITIVO_QA', 'Avaliação do aluno foi considerada injusta. Nenhuma punição aplicada ao corretor.')} isLoading={loadingAudit}>Ignorar Má Avaliação</Button>
+                      </Box>
+                  )}
+                </VStack>
+              )}
+
             </VStack>
           </Box>
         </Box>
+
+        <Modal isOpen={modalProposta.isOpen} onClose={modalProposta.onClose} size="3xl" scrollBehavior="inside">
+            <ModalOverlay backdropFilter="blur(3px)" />
+            <ModalContent borderRadius="xl" maxH="80vh">
+                <ModalHeader bg="blue.600" color="white" borderTopRadius="xl">Comando da Proposta & Textos Motivadores</ModalHeader>
+                <ModalCloseButton color="white" mt={1} />
+                <ModalBody py={6}>
+                    <Heading size="sm" color="gray.700" textTransform="uppercase" borderLeft="4px solid" borderColor="blue.500" pl={3} mb={3}>Comando da Proposta</Heading>
+                    <Box className="texto-limpo" dangerouslySetInnerHTML={{ __html: formatarTexto(descricaoProposta) }} mb={8} bg="gray.50" p={5} borderRadius="lg" border="1px solid" borderColor="gray.100" />
+                    
+                    <Heading size="sm" color="gray.700" mb={4} textTransform="uppercase" borderLeft="4px solid" borderColor="blue.500" pl={3}>Textos Motivadores</Heading>
+                    <VStack align="stretch" spacing={6}>
+                        {motivadoresTema && motivadoresTema.length > 0 ? (
+                          motivadoresTema.map((m, i) => (
+                            <Card key={i} borderLeft="4px solid" borderLeftColor="yellow.400" bg="yellow.50" shadow="none">
+                                <CardBody>
+                                    <Heading size="xs" color="yellow.800" mb={4} textTransform="uppercase">Texto Motivador {ROMAN_NUMERALS[i] || i + 1}</Heading>
+                                    {m.tipo === 'texto' ? <Box dangerouslySetInnerHTML={{__html: formatarTexto(m.conteudo)}} /> : <Image src={getImagemUrl(m.arquivo)} maxH="400px" borderRadius="md" />}
+                                </CardBody>
+                            </Card>
+                          ))
+                        ) : (
+                          <Text color="gray.500" fontStyle="italic">Sem textos motivadores anexados a este tema.</Text>
+                        )}
+                    </VStack>
+                </ModalBody>
+                <ModalFooter bg="gray.50" borderBottomRadius="xl"><Button onClick={modalProposta.onClose}>Fechar</Button></ModalFooter>
+            </ModalContent>
+        </Modal>
+
       </Flex>
     );
   }
 
-  // ==============================================================================
-  // RENDERIZAÇÃO MODO 2: DASHBOARD (TORRE DE CONTROLE)
-  // ==============================================================================
   return (
     <Container maxW="full" py={8} px={{ base: 4, md: 8 }} bg="gray.50" minH="100vh">
       <VStack spacing={6} align="stretch">
@@ -340,13 +574,13 @@ function TorreControle() {
         <Tabs isLazy index={tabIndex} onChange={(i) => setTabIndex(i)}>
           <TabList mb={6} borderBottom="2px solid" borderColor="gray.200" gap={2}>
             <Tab _selected={{ color: 'teal.700', bg: 'teal.50', borderBottom: '3px solid', borderColor: 'teal.500', fontWeight: 'bold' }}>🚦 Gestão da Fila</Tab>
-            <Tab _selected={{ color: 'orange.700', bg: 'orange.50', borderBottom: '3px solid', borderColor: 'orange.500', fontWeight: 'bold' }}>🚩 Triagem/Problemas {listaAuditoria.length > 0 && <Badge ml={2} colorScheme="red" borderRadius="full">{listaAuditoria.length}</Badge>}</Tab>
-            <Tab _selected={{ color: 'purple.700', bg: 'purple.50', borderBottom: '3px solid', borderColor: 'purple.500', fontWeight: 'bold' }}>💎 Controle de Qualidade (QA)</Tab>
+            <Tab _selected={{ color: 'red.700', bg: 'red.50', borderBottom: '3px solid', borderColor: 'red.500', fontWeight: 'bold' }}>⚖️ Auditoria & Recursos {listaAuditoria.length > 0 && <Badge ml={2} colorScheme="red" borderRadius="full">{listaAuditoria.length}</Badge>}</Tab>
+            <Tab _selected={{ color: 'orange.700', bg: 'orange.50', borderBottom: '3px solid', borderColor: 'orange.500', fontWeight: 'bold' }}>🛠️ Triagem de T.I. {listaTriagem.length > 0 && <Badge ml={2} colorScheme="orange" borderRadius="full">{listaTriagem.length}</Badge>}</Tab>
+            <Tab _selected={{ color: 'purple.700', bg: 'purple.50', borderBottom: '3px solid', borderColor: 'purple.500', fontWeight: 'bold' }}>💎 Qualidade (QA) {listaQA.length > 0 && <Badge ml={2} colorScheme="purple" borderRadius="full">{listaQA.length}</Badge>}</Tab>
           </TabList>
 
           <TabPanels>
             <TabPanel p={0}>
-              {/* NOVO: 6 CARDS ALINHADOS À ESQUERDA COM FONTE 1.875rem */}
               <SimpleGrid columns={{ base: 2, md: 3, lg: 6 }} spacing={4} mb={6}>
                 <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="yellow.400">
                   <Box p={4} textAlign="left"><Stat><StatLabel fontSize="xs" color="gray.500" fontWeight="bold" textTransform="uppercase">Aguardando</StatLabel><StatNumber fontSize="1.875rem" color="yellow.600">{qtdAguardando}</StatNumber></Stat></Box>
@@ -358,7 +592,7 @@ function TorreControle() {
                   <Box p={4} textAlign="left"><Stat><StatLabel fontSize="xs" color="gray.500" fontWeight="bold" textTransform="uppercase">Corrigidas</StatLabel><StatNumber fontSize="1.875rem" color="green.600">{qtdCorrigidas}</StatNumber></Stat></Box>
                 </Card>
                 <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="red.500">
-                  <Box p={4} textAlign="left"><Stat><StatLabel fontSize="xs" color="gray.500" fontWeight="bold" textTransform="uppercase">Devolvidas</StatLabel><StatNumber fontSize="1.875rem" color="red.600">{qtdDevolvidas}</StatNumber></Stat></Box>
+                  <Box p={4} textAlign="left"><Stat><StatLabel fontSize="xs" color="gray.500" fontWeight="bold" textTransform="uppercase">Auditoria / Triagem</StatLabel><StatNumber fontSize="1.875rem" color="red.600">{qtdProblemas}</StatNumber></Stat></Box>
                 </Card>
                 <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.100" borderTop="4px solid" borderTopColor="purple.500" bgGradient="linear(to-br, white, purple.50)">
                   <Box p={4} textAlign="left"><Stat><StatLabel fontSize="xs" color="purple.600" fontWeight="bold" textTransform="uppercase">VIP / Urgente</StatLabel><StatNumber fontSize="1.875rem" color="purple.700">{qtdVips}</StatNumber></Stat></Box>
@@ -374,11 +608,13 @@ function TorreControle() {
                   <Input placeholder="Buscar Cód, Tema, Aluno ou Corretor..." value={busca} onChange={e => setBusca(e.target.value)} />
                 </InputGroup>
                 
-                <Select w="140px" size="sm" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+                <Select w="180px" size="sm" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
                   <option value="TODOS">Status: Todos</option>
                   <option value="AGUARDANDO">Aguardando</option>
+                  <option value="PRESAS">⚠️ Presas c/ Corretor</option>
                   <option value="EM_CORRECAO">Em Correção</option>
                   <option value="CORRIGIDA">Corrigidas</option>
+                  <option value="FINALIZADA">Finalizadas / Pagas</option>
                   <option value="REFAZER">Em Refação</option>
                   <option value="DEVOLVIDA">Devolvidas/Anuladas</option>
                 </Select>
@@ -386,10 +622,21 @@ function TorreControle() {
                 <Divider orientation="vertical" h="20px" display={{ base: 'none', md: 'block' }} />
                 
                 <HStack spacing={2}>
-                    <Text fontSize="xs" color="gray.500" fontWeight="medium">De:</Text>
-                    <Input type="date" size="sm" w="120px" value={dataInicioFila} onChange={e => setDataInicioFila(e.target.value)} />
-                    <Text fontSize="xs" color="gray.500" fontWeight="medium">Até:</Text>
-                    <Input type="date" size="sm" w="120px" value={dataFimFila} onChange={e => setDataFimFila(e.target.value)} />
+                    <Select w="140px" size="sm" value={periodoFiltro} onChange={e => setPeriodoFiltro(e.target.value)}>
+                        <option value="MES_ATUAL">Mês Atual</option>
+                        <option value="MES_ANTERIOR">Mês Anterior</option>
+                        <option value="HOJE">Hoje</option>
+                        <option value="ONTEM">Ontem</option>
+                        <option value="TUDO">Todo o Período</option>
+                        <option value="PERSONALIZADO">Personalizado...</option>
+                    </Select>
+                    {periodoFiltro === 'PERSONALIZADO' && (
+                        <>
+                            <Input type="date" size="sm" w="120px" value={dataInicioFila} onChange={e => setDataInicioFila(e.target.value)} />
+                            <Text fontSize="xs" color="gray.500" fontWeight="medium">até</Text>
+                            <Input type="date" size="sm" w="120px" value={dataFimFila} onChange={e => setDataFimFila(e.target.value)} />
+                        </>
+                    )}
                 </HStack>
 
                 <Divider orientation="vertical" h="20px" display={{ base: 'none', md: 'block' }} />
@@ -401,47 +648,61 @@ function TorreControle() {
                   <option value="URGENTE">🟠 Urgente</option>
                 </Select>
 
-                {/* BOTÃO APENAS COM ÍCONE DE ATUALIZAR */}
                 <IconButton aria-label="Atualizar" icon={<RepeatIcon />} colorScheme="teal" size="sm" onClick={() => carregarDados(false)} isLoading={loading} />
               </Flex>
               
-              <Box bg="white" shadow="sm" borderRadius="lg" overflowX="auto" border="1px solid" borderColor="gray.200">
+              <Box bg="white" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="gray.200">
                 <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
-                  <Thead bg="gray.50"><Tr><Th w="8%" px={4}>Cód.</Th><Th w="32%" px={4}>Tema</Th><Th w="15%" px={3} textAlign="center">Status</Th><Th w="15%" px={3} textAlign="center">SLA / Envio</Th><Th w="15%" px={3} textAlign="center">Ações</Th></Tr></Thead>
+                  <Thead bg="gray.50"><Tr><Th w="10%" px={4}>Cód.</Th><Th w="40%" px={4}>Tema</Th><Th w="15%" px={3} textAlign="center">Status</Th><Th w="20%" px={3} textAlign="center">Datas / SLA</Th><Th w="15%" px={3} textAlign="center">Ações</Th></Tr></Thead>
                   <Tbody>
                     {filaPaginada.map(r => {
-                      const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
-                      const sla = getSLA(r); // <-- AGORA USA O GETSLA COM A REDAÇÃO INTEIRA
+                      const sla = getSLA(r); 
+                      const corretorNomeStr = getCorretorNome(r);
                       return (
-                      <Tr key={r.id} _hover={{ bg: 'gray.50' }} bg={r.status === 'REFAZER' ? 'red.50' : ((r.is_urgente || r.vip_pago) ? 'purple.50' : 'transparent')}>
+                      <Tr key={r.id} _hover={{ bg: 'gray.50' }} bg={r.status === 'REFAZER' ? 'yellow.50' : ((r.is_urgente || r.vip_pago) ? 'purple.50' : 'transparent')}>
                         <Td fontWeight="bold" color="gray.700" px={4}>#{r.id}</Td>
-                        <Td px={4} isTruncated title={r.tema_titulo}><Text fontWeight="bold" fontSize="sm" color="gray.800" isTruncated>{r.tema_titulo}</Text><Text fontSize="xs" color="gray.500">Aluno: <strong>{r.aluno_nome || "Desconhecido"}</strong></Text></Td>
+                        <Td px={4} title={r.tema_titulo}>
+                            <Text fontWeight="bold" fontSize="sm" color="gray.800" whiteSpace="normal" wordBreak="break-word">{r.tema_titulo}</Text>
+                            <Text fontSize="xs" color="gray.500" mt={1}>Aluno: <strong>{r.aluno_nome || "Desconhecido"}</strong></Text>
+                        </Td>
                         <Td px={3} textAlign="center">
-                          {r.status === 'REFAZER' ? (<Badge colorScheme="red" borderRadius="md" px={2} py={1} fontSize="xs">EM REFAÇÃO</Badge>) : (<Badge colorScheme={r.status === 'CORRIGIDA' ? 'green' : r.status === 'EM_CORRECAO' ? 'blue' : 'yellow'} borderRadius="md" px={2} py={1} fontSize="xs">{r.status.replace('_', ' ')}</Badge>)}
-                          {r.corretor_atual && (r.status === 'EM_CORRECAO' || r.status === 'REFAZER' || r.status === 'CORRIGIDA') && (<Text fontSize="2xs" color="blue.600" mt={1} fontWeight="bold">Prof: {r.corretor_nome || `ID: ${r.corretor_atual}`}</Text>)}
+                          {getStatusBadge(r.status)}
+                          {corretorNomeStr !== 'N/A' && (r.status === 'EM_CORRECAO' || r.status === 'REFAZER' || r.status === 'CORRIGIDA' || r.status === 'FINALIZADA') && (<Text fontSize="2xs" color="blue.600" mt={1} fontWeight="bold">Prof: {corretorNomeStr}</Text>)}
                         </Td>
                         <Td px={3} textAlign="center">
                           <VStack spacing={1}>
                             <Badge colorScheme={sla.badge} borderRadius="md" px={2} fontSize="2xs">{sla.texto}</Badge>
-                            <Text fontSize="xs" color="gray.600">{r.data_envio ? new Date(r.data_envio).toLocaleDateString('pt-BR') : '--'}</Text>
+                            <Text fontSize="xs" color="gray.600">Envio: {r.data_envio ? new Date(r.data_envio).toLocaleDateString('pt-BR') : '--'}</Text>
+                            {['CORRIGIDA', 'EM_QA', 'FINALIZADA'].includes(r.status) && r.data_atualizacao && (
+                                <Text fontSize="xs" color="green.600" fontWeight="bold">Correção: {new Date(r.data_atualizacao).toLocaleDateString('pt-BR')}</Text>
+                            )}
                             {r.vip_pago && <Badge colorScheme="purple" variant="solid" mt={1} fontSize="2xs"><StarIcon mr={1} mb={0.5}/> VIP PAGO</Badge>}
                             {!r.vip_pago && r.is_urgente && <Badge colorScheme="red" variant="solid" mt={1} fontSize="2xs"><WarningIcon mr={1}/> URGENTE</Badge>}
                           </VStack>
                         </Td>
                         <Td px={3} textAlign="center">
                           <HStack spacing={2} justify="center">
-                            {r.status === 'CORRIGIDA' || r.status === 'EM_QA' ? (
-                                isPaga ? (
-                                    <Badge colorScheme="green" variant="solid" px={2} py={1.5} borderRadius="md" display="flex" alignItems="center"><CheckCircleIcon mr={1}/> PAGA (Encerrada)</Badge>
-                                ) : (
-                                    <Button size="sm" colorScheme="purple" leftIcon={<SearchIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm">{r.status === 'EM_QA' ? 'Inspecionar' : 'Auditar (QA)'}</Button>
-                                )
-                            ) : (
+                            
+                            {/* BOTÃO OLHO - PARA ENCERRADAS/CANCELADAS */}
+                            {['DEVOLVIDA', 'ANULADA', 'FINALIZADA'].includes(r.status) && (
+                                <Tooltip label="Ver Detalhes" hasArrow>
+                                    <IconButton size="sm" colorScheme="blue" variant="outline" icon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm" />
+                                </Tooltip>
+                            )}
+
+                            {/* BOTÃO QA - APENAS PARA CORRIGIDA OU EM QA */}
+                            {['CORRIGIDA', 'EM_QA'].includes(r.status) && (
+                                <Button size="sm" colorScheme="purple" onClick={() => abrirJulgamento(r.id)} shadow="sm">QA</Button>
+                            )}
+
+                            {/* FERRAMENTAS DE PRIORIDADE E LIBERAÇÃO */}
+                            {['AGUARDANDO', 'EM_CORRECAO', 'REFAZER'].includes(r.status) && (
                                 <>
                                   <Tooltip label={r.vip_pago ? "Urgência comprada (Inalterável)" : (r.is_urgente ? "Remover Urgência" : "Marcar Urgente")} hasArrow><Button size="sm" colorScheme={r.vip_pago || r.is_urgente ? "purple" : "gray"} variant={r.vip_pago || r.is_urgente ? "solid" : "outline"} onClick={() => toggleUrgencia(r)} isDisabled={r.vip_pago}><Icon as={r.vip_pago ? StarIcon : WarningIcon} /></Button></Tooltip>
                                   <Tooltip label={(r.status === 'EM_CORRECAO' || r.status === 'REFAZER') ? "Arrancar do Corretor" : "Nenhum corretor pegou ainda"} hasArrow><Button size="sm" colorScheme="orange" variant="outline" isDisabled={r.status !== 'EM_CORRECAO' && r.status !== 'REFAZER'} onClick={() => confirmarLiberacao(r.id)}><Icon as={UnlockIcon} /></Button></Tooltip>
                                 </>
                             )}
+
                           </HStack>
                         </Td>
                       </Tr>
@@ -459,56 +720,132 @@ function TorreControle() {
               </Box>
             </TabPanel>
 
-            {/* ABA 2: AUDITORIA (TRIAGEM DE PROBLEMAS DO CORRETOR) */}
+            {/* ABA 2: AUDITORIA PEDAGÓGICA */}
             <TabPanel p={0}>
-              <Card bg="orange.50" shadow="sm" borderRadius="lg" overflowX="auto" border="1px solid" borderColor="orange.200">
-                <Table variant="simple">
-                  <Thead bg="orange.100"><Tr><Th px={6} color="orange.800">Código / Tema</Th><Th px={4} textAlign="center" color="orange.800">Aluno</Th><Th px={4} textAlign="center" color="orange.800">Status</Th><Th px={6} textAlign="right" color="orange.800">Ação</Th></Tr></Thead>
-                  <Tbody>
+              <Card bg="red.50" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="red.200">
+                <Flex p={4} bg="white" borderBottom="1px solid" borderColor="red.200" justify="space-between" align="center">
+                  <HStack>
+                    <Text fontSize="sm" fontWeight="bold" color="red.700">Filtrar Pedidos:</Text>
+                    <Select size="sm" w="200px" bg="gray.50" value={filtroAuditoria} onChange={e => setFiltroAuditoria(e.target.value)}>
+                        <option value="TODOS">Todos as Análises</option>
+                        <option value="EM_AUDITORIA">Somente Falhas Graves</option>
+                        <option value="EM_RECURSO">Somente Recursos (Alunos)</option>
+                    </Select>
+                  </HStack>
+                </Flex>
+                <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
+                <Thead bg="red.100"><Tr><Th w="40%" px={6} color="red.800">Código / Tema</Th><Th w="20%" px={4} textAlign="center" color="red.800">Origem</Th><Th w="25%" px={4} textAlign="center" color="red.800">Aluno</Th><Th w="15%" px={6} textAlign="right" color="red.800">Ação</Th></Tr></Thead>
+                <Tbody>
                     {auditoriaPaginada.map(r => (
-                      <Tr key={r.id} _hover={{ bg: 'orange.100' }}>
-                        <Td px={6}><Text fontWeight="bold" fontSize="sm" color="gray.800">#{r.id} - {r.tema_titulo}</Text><Text fontSize="xs" color="gray.500">Enviada em {new Date(r.data_envio).toLocaleDateString('pt-BR')}</Text></Td>
+                    <Tr key={r.id} _hover={{ bg: 'red.100' }}>
+                        <Td px={6}>
+                            <Text fontWeight="bold" fontSize="sm" color="gray.800" whiteSpace="normal" wordBreak="break-word">#{r.id} - {r.tema_titulo}</Text>
+                            <Text fontSize="xs" color="gray.500">Enviada em {new Date(r.data_envio).toLocaleDateString('pt-BR')}</Text>
+                        </Td>
+                        <Td px={4} textAlign="center">
+                            {r.status === 'EM_RECURSO' || r.status === 'RECURSO' ? (
+                                <Badge colorScheme="blue" variant="solid" borderRadius="md" px={2} py={1}><ViewIcon mr={1}/> RECURSO</Badge>
+                            ) : (
+                                <Badge colorScheme="red" variant="solid" borderRadius="md" px={2} py={1}><WarningTwoIcon mr={1}/> FALHA GRAVE</Badge>
+                            )}
+                        </Td>
                         <Td px={4} textAlign="center"><Text fontWeight="medium" fontSize="sm">{r.aluno_nome}</Text></Td>
-                        <Td px={4} textAlign="center"><Badge colorScheme="orange" variant="solid" borderRadius="md" px={2}><WarningTwoIcon mr={1}/> AGUARDANDO JULGAMENTO</Badge></Td>
-                        <Td px={6} textAlign="right"><Button size="sm" colorScheme="orange" leftIcon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm">Julgar Erro</Button></Td>
-                      </Tr>
+                        <Td px={6} textAlign="right"><Button size="sm" colorScheme="red" leftIcon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm" w="full">Julgar Erro</Button></Td>
+                    </Tr>
                     ))}
-                    {auditoriaPaginada.length === 0 && <Tr><Td colSpan={4} textAlign="center" py={10} color="gray.500">Nenhuma redação com problema reportado!</Td></Tr>}
-                  </Tbody>
+                    {auditoriaPaginada.length === 0 && <Tr><Td colSpan={4} textAlign="center" py={10} color="gray.500">Nenhuma redação na fila de auditoria pedagógica!</Td></Tr>}
+                </Tbody>
                 </Table>
                 {listaAuditoria.length > 0 && (
-                  <Flex justify="space-between" align="center" p={4} bg="orange.100" borderTop="1px solid" borderColor="orange.200" wrap="wrap" gap={4}>
-                    <HStack><Text fontSize="sm" color="orange.800">Mostrar</Text><Select size="sm" w="80px" bg="white" value={itensPorPaginaAuditoria} onChange={(e) => { setItensPorPaginaAuditoria(Number(e.target.value)); setPaginaAtualAuditoria(1); }}><option value={10}>10</option><option value={25}>25</option></Select></HStack>
-                    <Text fontSize="sm" color="orange.800" fontWeight="bold">Total de registros encontrados: {listaAuditoria.length}</Text>
-                    <HStack><Button size="sm" onClick={() => setPaginaAtualAuditoria(p => Math.max(1, p - 1))} isDisabled={paginaAtualAuditoria === 1} bg="white" shadow="sm">Anterior</Button><Text fontSize="sm" fontWeight="bold" px={2} color="orange.800">{paginaAtualAuditoria} / {Math.ceil(listaAuditoria.length / itensPorPaginaAuditoria)}</Text><Button size="sm" onClick={() => setPaginaAtualAuditoria(p => Math.min(Math.ceil(listaAuditoria.length / itensPorPaginaAuditoria), p + 1))} isDisabled={paginaAtualAuditoria === Math.ceil(listaAuditoria.length / itensPorPaginaAuditoria)} bg="white" shadow="sm">Próxima</Button></HStack>
+                  <Flex justify="space-between" align="center" p={4} bg="red.100" borderTop="1px solid" borderColor="red.200" wrap="wrap" gap={4}>
+                    <HStack><Text fontSize="sm" color="red.800">Mostrar</Text><Select size="sm" w="80px" bg="white" value={itensPorPaginaAuditoria} onChange={(e) => { setItensPorPaginaAuditoria(Number(e.target.value)); setPaginaAtualAuditoria(1); }}><option value={10}>10</option><option value={25}>25</option></Select></HStack>
+                    <Text fontSize="sm" color="red.800" fontWeight="bold">Total de registros encontrados: {listaAuditoria.length}</Text>
+                    <HStack><Button size="sm" onClick={() => setPaginaAtualAuditoria(p => Math.max(1, p - 1))} isDisabled={paginaAtualAuditoria === 1} bg="white" shadow="sm">Anterior</Button><Text fontSize="sm" fontWeight="bold" px={2} color="red.800">{paginaAtualAuditoria} / {Math.ceil(listaAuditoria.length / itensPorPaginaAuditoria)}</Text><Button size="sm" onClick={() => setPaginaAtualAuditoria(p => Math.min(Math.ceil(listaAuditoria.length / itensPorPaginaAuditoria), p + 1))} isDisabled={paginaAtualAuditoria === Math.ceil(listaAuditoria.length / itensPorPaginaAuditoria)} bg="white" shadow="sm">Próxima</Button></HStack>
                   </Flex>
                 )}
               </Card>
             </TabPanel>
 
-            {/* ABA 3: CONTROLE DE QUALIDADE (Amostragem QA 5% Automático) */}
+            {/* ABA 3: TRIAGEM TÉCNICA */}
             <TabPanel p={0}>
-              <Card bg="purple.50" shadow="sm" borderRadius="lg" overflowX="auto" border="1px solid" borderColor="purple.200">
-                <Table variant="simple">
-                  <Thead bg="purple.100"><Tr><Th px={6} color="purple.800">Código / Tema</Th><Th px={4} textAlign="center" color="purple.800">Aluno</Th><Th px={4} textAlign="center" color="purple.800">Corretor</Th><Th px={6} textAlign="right" color="purple.800">Ação</Th></Tr></Thead>
+              <Card bg="orange.50" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="orange.200">
+                <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <Thead bg="orange.100"><Tr><Th w="40%" px={6} color="orange.800">Código / Tema</Th><Th w="25%" px={4} textAlign="center" color="orange.800">Corretor Reportou</Th><Th w="20%" px={4} textAlign="center" color="orange.800">Aluno</Th><Th w="15%" px={6} textAlign="right" color="orange.800">Ação</Th></Tr></Thead>
+                  <Tbody>
+                    {triagemPaginada.map(r => (
+                      <Tr key={r.id} _hover={{ bg: 'orange.100' }}>
+                        <Td px={6}>
+                            <Text fontWeight="bold" fontSize="sm" color="gray.800" whiteSpace="normal" wordBreak="break-word">#{r.id} - {r.tema_titulo}</Text>
+                            <Text fontSize="xs" color="gray.500">Enviada em {new Date(r.data_envio).toLocaleDateString('pt-BR')}</Text>
+                        </Td>
+                        <Td px={4} textAlign="center"><Text fontWeight="bold" color="orange.700" fontSize="sm">{getCorretorNome(r)}</Text></Td>
+                        <Td px={4} textAlign="center"><Text fontWeight="medium" fontSize="sm">{r.aluno_nome}</Text></Td>
+                        <Td px={6} textAlign="right"><Button size="sm" colorScheme="orange" leftIcon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm" w="full">Analisar</Button></Td>
+                      </Tr>
+                    ))}
+                    {triagemPaginada.length === 0 && <Tr><Td colSpan={4} textAlign="center" py={10} color="gray.500">Nenhum problema técnico reportado!</Td></Tr>}
+                  </Tbody>
+                </Table>
+                {listaTriagem.length > 0 && (
+                  <Flex justify="space-between" align="center" p={4} bg="orange.100" borderTop="1px solid" borderColor="orange.200" wrap="wrap" gap={4}>
+                    <HStack><Text fontSize="sm" color="orange.800">Mostrar</Text><Select size="sm" w="80px" bg="white" value={itensPorPaginaTriagem} onChange={(e) => { setItensPorPaginaTriagem(Number(e.target.value)); setPaginaAtualTriagem(1); }}><option value={10}>10</option><option value={25}>25</option></Select></HStack>
+                    <Text fontSize="sm" color="orange.800" fontWeight="bold">Total de registros: {listaTriagem.length}</Text>
+                    <HStack><Button size="sm" onClick={() => setPaginaAtualTriagem(p => Math.max(1, p - 1))} isDisabled={paginaAtualTriagem === 1} bg="white" shadow="sm">Anterior</Button><Text fontSize="sm" fontWeight="bold" px={2} color="orange.800">{paginaAtualTriagem} / {Math.ceil(listaTriagem.length / itensPorPaginaTriagem)}</Text><Button size="sm" onClick={() => setPaginaAtualTriagem(p => Math.min(Math.ceil(listaTriagem.length / itensPorPaginaTriagem), p + 1))} isDisabled={paginaAtualTriagem === Math.ceil(listaTriagem.length / itensPorPaginaTriagem)} bg="white" shadow="sm">Próxima</Button></HStack>
+                  </Flex>
+                )}
+              </Card>
+            </TabPanel>
+
+            {/* ABA 4: CONTROLE DE QUALIDADE */}
+            <TabPanel p={0}>
+              <Card bg="purple.50" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="purple.200">
+                <Flex p={4} bg="white" borderBottom="1px solid" borderColor="purple.200" justify="space-between" align="center" wrap="wrap" gap={3}>
+                  <HStack spacing={4}>
+                    <HStack>
+                        <Text fontSize="sm" fontWeight="bold" color="purple.700">Origem:</Text>
+                        <Select size="sm" w="200px" bg="gray.50" value={filtroQA} onChange={e => setFiltroQA(e.target.value)}>
+                            <option value="TODOS">Todas as Auditorias</option>
+                            <option value="MA_AVALIACAO">⭐ Somente Má Avaliação</option>
+                            <option value="AMOSTRAGEM">🎲 Somente Amostragem (5%)</option>
+                            <option value="PAGAS">💰 Somente Já Pagas</option>
+                        </Select>
+                    </HStack>
+                    <Divider orientation="vertical" h="20px" borderColor="purple.300" />
+                    <HStack>
+                        <Text fontSize="sm" fontWeight="bold" color="purple.700">Corretor:</Text>
+                        <Select size="sm" w="200px" bg="gray.50" value={filtroCorretorQA} onChange={e => setFiltroCorretorQA(e.target.value)}>
+                            <option value="TODOS">Todos os Corretores</option>
+                            {corretoresQAUnicos.map(c => <option key={c} value={c}>{c}</option>)}
+                        </Select>
+                    </HStack>
+                  </HStack>
+                </Flex>
+                <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <Thead bg="purple.100"><Tr><Th w="30%" px={6} color="purple.800">Código / Tema</Th><Th w="20%" px={4} textAlign="center" color="purple.800">Aluno</Th><Th w="20%" px={4} textAlign="center" color="purple.800">Corretor Avaliado</Th><Th w="15%" px={4} textAlign="center" color="purple.800">Origem / Status</Th><Th w="15%" px={6} textAlign="right" color="purple.800">Ação</Th></Tr></Thead>
                   <Tbody>
                     {qaPaginada.map(r => {
                       const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
+                      const isMaAvaliacao = r.correcao?.avaliacao_aluno > 0;
                       return (
                       <Tr key={r.id} _hover={{ bg: 'purple.100' }}>
-                        <Td px={6}><Text fontWeight="bold" fontSize="sm" color="gray.800">#{r.id} - {r.tema_titulo}</Text><Text fontSize="xs" color="gray.500">Corrigida em {new Date(r.data_envio).toLocaleDateString('pt-BR')}</Text></Td>
+                        <Td px={6}>
+                            <Text fontWeight="bold" fontSize="sm" color="gray.800" whiteSpace="normal" wordBreak="break-word">#{r.id} - {r.tema_titulo}</Text>
+                            <Text fontSize="xs" color="gray.500">Corrigida em {new Date(r.data_envio).toLocaleDateString('pt-BR')}</Text>
+                        </Td>
                         <Td px={4} textAlign="center"><Text fontWeight="medium" fontSize="sm">{r.aluno_nome}</Text></Td>
-                        <Td px={4} textAlign="center"><Badge colorScheme="purple" variant="outline" borderRadius="md" px={2}>Prof: {r.corretor_nome || `ID: ${r.corretor_atual}`}</Badge></Td>
+                        <Td px={4} textAlign="center"><Badge colorScheme="purple" variant="outline" borderRadius="md" px={2}>Prof: {getCorretorNome(r)}</Badge></Td>
+                        <Td px={4} textAlign="center">
+                            <VStack spacing={1}>
+                                {isMaAvaliacao ? <Badge colorScheme="red" fontSize="2xs"><StarIcon mr={1}/> MÁ AVALIAÇÃO</Badge> : <Badge colorScheme="blue" fontSize="2xs"><Icon as={SearchIcon} mr={1}/> AMOSTRAGEM</Badge>}
+                                {isPaga && <Badge colorScheme="green" fontSize="2xs"><CheckCircleIcon mr={1}/> PAGA</Badge>}
+                            </VStack>
+                        </Td>
                         <Td px={6} textAlign="right">
-                          {isPaga ? (
-                             <Badge colorScheme="green" variant="solid" px={3} py={1.5} borderRadius="md"><CheckCircleIcon mr={1}/> PAGA (Encerrada)</Badge>
-                          ) : (
-                            <Button size="sm" colorScheme="purple" leftIcon={<SearchIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm">Inspecionar</Button>
-                          )}
+                          <Button w="full" size="sm" colorScheme="purple" leftIcon={<SearchIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm">Inspecionar</Button>
                         </Td>
                       </Tr>
                     )})}
-                    {qaPaginada.length === 0 && <Tr><Td colSpan={4} textAlign="center" py={10} color="gray.500">A amostragem automática de qualidade está vazia.</Td></Tr>}
+                    {qaPaginada.length === 0 && <Tr><Td colSpan={5} textAlign="center" py={10} color="gray.500">A amostragem automática de qualidade está vazia.</Td></Tr>}
                   </Tbody>
                 </Table>
                 {listaQA.length > 0 && (

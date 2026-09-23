@@ -291,7 +291,7 @@ const Home = () => {
                                 <Text fontSize="xs" color="gray.400" mb={2} textAlign="center">Pagamento à vista</Text>
                             )}
                             <Button w="full" size="lg" colorScheme={isDestaque ? "yellow" : "teal"} bg={isDestaque ? "yellow.400" : undefined} color={isDestaque ? "yellow.900" : undefined} _hover={isDestaque ? { bg: 'yellow.500' } : undefined} onClick={() => navigate(`/cadastro?pacote=${p.id}`)}>
-                                Assinar Agora
+                                Comprar Agora
                             </Button>
                         </Box>
                     </CardBody>

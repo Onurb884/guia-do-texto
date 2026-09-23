@@ -4,6 +4,33 @@ import { Flex, Box } from '@chakra-ui/react';
 import GestaoMateriais from './GestaoMateriais';
 import Home from './Home';
 
+import axios from 'axios';
+
+// --- SEGURANÇA INVISÍVEL (Axios Interceptor) ---
+// Vigia todas as respostas do servidor. Se o token expirar (Erro 401),
+// ele limpa o cache silenciosamente e devolve o utilizador ao Login sem quebrar a tela.
+axios.interceptors.response.use(
+  (response) => {
+    // Se a resposta for sucesso, apenas deixa passar
+    return response;
+  },
+  (error) => {
+    // Se bater na porta e o servidor disser 401 (Não Autorizado)
+    if (error.response && error.response.status === 401) {
+      // 1. Limpa as chaves caducadas da memória
+      localStorage.removeItem('token');
+      localStorage.removeItem('redacao_em_andamento');
+      localStorage.removeItem('correcao_endtime');
+      
+      // 2. Chuta para a tela de login (apenas se ele já não estiver nela)
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // IMPORTAÇÕES
 import Login from './Login';
 import Cadastro from './Cadastro';
