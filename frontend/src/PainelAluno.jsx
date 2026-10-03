@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Flex, Box, Heading, Text, Card, CardBody, VStack, SimpleGrid, Badge, Divider, Button, Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverHeader, PopoverBody, useToast, Image, HStack, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, InputGroup, Input, useDisclosure, Icon, IconButton } from '@chakra-ui/react';
-import { BellIcon, CheckCircleIcon, WarningTwoIcon, TimeIcon, ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
+import { BellIcon, CheckCircleIcon, WarningTwoIcon, TimeIcon, ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 
 import AbaDashboard from './abas/AbaDashboard';
 import AbaHistorico from './abas/AbaHistorico';
@@ -149,7 +149,7 @@ const PainelAluno = () => {
         if (banners.length === 0) return;
         const timerInterval = setInterval(() => {
             const bannerAtual = banners[bannerIndex % banners.length];
-            if (bannerAtual && bannerAtual.data_fim) {
+            if (bannerAtual && bannerAtual.data_fim && bannerAtual.tipo === 'OFERTA') {
                 const distance = new Date(bannerAtual.data_fim).getTime() - new Date().getTime();
                 if (distance < 0) { setTempoVitrine('Expirou'); } else {
                     const d = Math.floor(distance / (1000 * 60 * 60 * 24)); const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)); const s = Math.floor((distance % (1000 * 60)) / 1000);
@@ -168,6 +168,8 @@ const PainelAluno = () => {
                 setDadosPixOferta(null); setAguardandoCartaoOferta(false); setTransacaoCartaoOferta(null);
                 openOferta();
             } else { toast({ title: 'Pacote indisponível no momento.', status: 'error' }); }
+        } else if ((banner.tipo === 'EVENTO' || banner.tipo === 'AVISO') && banner.link_destino) {
+            window.open(banner.link_destino, '_blank');
         }
     };
 
@@ -253,7 +255,6 @@ const PainelAluno = () => {
                     {banners.length > 0 && (
                         <Flex align="center" gap={3} direction={{ base: "column", md: "row" }} w={{ base: "100%", md: "auto" }}>
                             
-                            {/* SETAS DE NAVEGAÇÃO NO LADO ESQUERDO (Fora do Banner) */}
                             {banners.length > 1 && (
                                 <Flex direction={{ base: "row", md: "column" }} gap={2}>
                                     <IconButton aria-label="Anterior" icon={<ChevronLeftIcon boxSize={6} />} size="sm" isRound bg="white" color="gray.600" shadow="sm" border="1px solid" borderColor="gray.200" _hover={{ bg: "gray.50" }} onClick={() => setBannerIndex(prev => prev === 0 ? banners.length - 1 : prev - 1)} />
@@ -261,28 +262,74 @@ const PainelAluno = () => {
                                 </Flex>
                             )}
 
-                            {/* O CARROSSEL DE BANNERS */}
-                            <Box maxW={{ base: "100%", lg: "400px", xl: "745px" }} w="full" flexShrink={0} position="relative" overflow="hidden" borderRadius="xl" onMouseEnter={() => setIsHoveredBanner(true)} onMouseLeave={() => setIsHoveredBanner(false)} boxShadow="md">
-                                <Flex w={`${banners.length * 100}%`} transform={`translateX(-${(bannerIndex % banners.length) * (100 / banners.length)}%)`} transition="transform 0.5s ease-in-out">
-                                    {banners.map((banner, idx) => (
-                                        <Box w={`${100 / banners.length}%`} key={idx}>
-                                            <Card onClick={() => handleBannerClick(banner)} cursor={banner.tipo === 'OFERTA' ? "pointer" : "default"} w="full" minH={{ base: "auto", md: "100px" }} bgGradient={!banner.imagem_fundo ? banner.cor_fundo : 'none'} bg={banner.imagem_fundo ? 'gray.900' : undefined} shadow="none" border="none" px={{ base: 4, md: 6 }} py={4} borderRadius="xl" overflow="hidden" position="relative" display="flex" flexDirection={{ base: "column", md: "row" }} justify="space-between" align={{ base: "start", md: "center" }} gap={4} className={banner.tipo === 'OFERTA' ? 'banner-oferta' : ''}>
-                                                {banner.imagem_fundo && (<><Image src={banner.imagem_fundo} position="absolute" top={0} left={0} w="100%" h="100%" objectFit="cover" zIndex={0} pointerEvents="none" /><Box position="absolute" top={0} left={0} w="100%" h="100%" bgGradient="linear(to-r, rgba(0,0,0,0.9), rgba(0,0,0,0.5))" zIndex={1} pointerEvents="none" /></>)}
+                            <Box bg="white" maxW={{ base: "100%", lg: "400px", xl: "745px" }} w="full" flexShrink={0} position="relative" overflow="hidden" borderRadius="xl" onMouseEnter={() => setIsHoveredBanner(true)} onMouseLeave={() => setIsHoveredBanner(false)} boxShadow="md">
+                                <Flex w={`${banners.length * 100}%`} h="full" alignItems="stretch" transform={`translateX(-${(bannerIndex % banners.length) * (100 / banners.length)}%)`} transition="transform 0.5s ease-in-out">
+                                    {banners.map((banner, idx) => {
+                                        let badgeInfo = { cor: 'blue', texto: '📢 AVISO GERAL' };
+                                        if (banner.tipo === 'OFERTA') badgeInfo = { cor: 'red', texto: '⚡ OFERTA LIMITADA' };
+                                        if (banner.tipo === 'EVENTO') badgeInfo = { cor: 'green', texto: '📅 AULÃO/EVENTO' };
+                                        
+                                        const cClick = banner.tipo === 'OFERTA' || banner.link_destino ? "pointer" : "default";
+                                        const rawCor = banner.cor_pelicula || 'black';
+                                        const isLinear = rawCor.includes('linear');
+                                        const safeCor = (rawCor === 'rgba(0,0,0,' || rawCor === 'rgba(255,255,255,') ? (rawCor.includes('255') ? 'white' : 'black') : rawCor;
+
+                                        return (
+                                        <Box w={`${100 / banners.length}%`} h="full" display="flex" key={idx}>
+                                            <Card flex="1" h="full" onClick={() => handleBannerClick(banner)} cursor={cClick} w="full" minH={{ base: "auto", md: "113px" }} bgGradient={!banner.imagem_fundo ? banner.cor_fundo : 'none'} bg={banner.imagem_fundo ? 'gray.900' : undefined} shadow="none" border="none" px={{ base: 4, md: 6 }} py={4} borderRadius="xl" overflow="hidden" position="relative" display="flex" flexDirection={{ base: "column", md: "row" }} justify="space-between" align={{ base: "start", md: "center" }} gap={4} className={banner.tipo === 'OFERTA' ? 'banner-oferta' : ''}>
+                                                
+                                                {banner.imagem_fundo && (
+                                                    <>
+                                                        <Image src={banner.imagem_fundo} position="absolute" top={0} left={0} w="100%" h="100%" objectFit="cover" zIndex={0} pointerEvents="none" />
+                                                        <Box 
+                                                            position="absolute" top={0} left={0} w="100%" h="100%" 
+                                                            bgGradient={isLinear ? safeCor : 'none'}
+                                                            bg={!isLinear ? safeCor : undefined}
+                                                            opacity={(banner.opacidade_pelicula ?? 60) / 100}
+                                                            zIndex={1} pointerEvents="none" 
+                                                        />
+                                                    </>
+                                                )}
                                                 
                                                 <VStack align="start" spacing={1.5} justify="center" h="full" w="full" position="relative" zIndex={2}>
-                                                    <Badge colorScheme={banner.tipo === 'EVENTO' ? 'green' : 'whiteAlpha'} fontSize="xs" px={2} py={0.5} borderRadius="md" mb={0}>{banner.tipo === 'OFERTA' ? 'OFERTA LIMITADA' : 'AULÃO AO VIVO'}</Badge>
-                                                    <Heading size="md" color="white" lineHeight="1.3" textShadow="1px 1px 3px rgba(0,0,0,0.9)">{banner.titulo}</Heading>
-                                                    {banner.descricao && <Text fontSize="sm" color="whiteAlpha.900" textShadow="1px 1px 2px rgba(0,0,0,0.9)">{banner.descricao}</Text>}
+                                                    <Badge colorScheme={badgeInfo.cor} fontSize="xs" px={2} py={0.5} borderRadius="md" mb={0}>{badgeInfo.texto}</Badge>
+                                                    <Heading size="md" color={safeCor === 'white' ? 'gray.900' : 'white'} lineHeight="1.3" textShadow={safeCor === 'white' ? 'none' : "1px 1px 3px rgba(0,0,0,0.9)"}>{banner.titulo}</Heading>
+                                                    {banner.descricao && <Text fontSize="sm" color={safeCor === 'white' ? 'gray.800' : 'whiteAlpha.900'} textShadow={safeCor === 'white' ? 'none' : "1px 1px 2px rgba(0,0,0,0.9)"}>{banner.descricao}</Text>}
                                                 </VStack>
                                                 
-                                                {banner.tipo === 'OFERTA' && (<HStack position="relative" zIndex={2} spacing={3} bg="blackAlpha.500" px={5} py={3} borderRadius="lg" justify="center" backdropFilter="blur(4px)" border="1px solid rgba(255,255,255,0.2)" flexShrink={0} mb={banners.length > 1 ? 3 : 0}><TimeIcon color="white" boxSize={5} /><Text fontSize="lg" fontWeight="bold" color="white" lineHeight="1" letterSpacing="widest">{tempoVitrine || '...'}</Text></HStack>)}
-                                                {banner.tipo === 'EVENTO' && banner.data_fim && (<HStack position="relative" zIndex={2} spacing={3} bg="whiteAlpha.900" px={5} py={3} borderRadius="lg" justify="center" color="gray.800" shadow="md" flexShrink={0} mb={banners.length > 1 ? 3 : 0}><VStack spacing={0}><Text fontSize="sm" fontWeight="900" textTransform="uppercase" color="red.500" lineHeight="1">{new Date(banner.data_fim).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}</Text><Text fontSize="3xl" fontWeight="900" lineHeight="1" my={0}>{new Date(banner.data_fim).getDate()}</Text></VStack><Divider orientation="vertical" h="40px" borderColor="gray.300" /><Text fontSize="3xl" fontWeight="900" lineHeight="1">{new Date(banner.data_fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text></HStack>)}
+                                                {/* NOVA DISPOSIÇÃO HORIZONTAL: O botão fica ao lado da data/cronômetro */}
+                                                <Flex direction={{ base: "column", md: "row" }} align={{ base: "stretch", md: "center" }} justify={{ base: "center", md: "flex-end" }} gap={3} flexShrink={0} position="relative" zIndex={2} mb={banners.length > 1 ? 3 : 0} w={{ base: "full", md: "auto" }}>
+                                                    
+                                                    {banner.tipo === 'OFERTA' && (
+                                                        <HStack spacing={3} bg="blackAlpha.500" px={5} py={2.5} borderRadius="lg" justify="center" backdropFilter="blur(4px)" border="1px solid rgba(255,255,255,0.2)" w="full">
+                                                            <TimeIcon color="white" boxSize={5} />
+                                                            <Text fontSize="lg" fontWeight="bold" color="white" lineHeight="1" letterSpacing="widest">{tempoVitrine || '...'}</Text>
+                                                        </HStack>
+                                                    )}
+
+                                                    {banner.tipo === 'EVENTO' && banner.data_fim && (
+                                                        <HStack spacing={3} bg="whiteAlpha.900" px={4} py={2} borderRadius="lg" justify="center" color="gray.800" shadow="md" w="full">
+                                                            <VStack spacing={0}>
+                                                                <Text fontSize="2xs" fontWeight="900" textTransform="uppercase" color="red.500" lineHeight="1">{new Date(banner.data_fim).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}</Text>
+                                                                <Text fontSize="xl" fontWeight="900" lineHeight="1" my={0}>{new Date(banner.data_fim).getDate()}</Text>
+                                                            </VStack>
+                                                            <Divider orientation="vertical" h="30px" borderColor="gray.300" />
+                                                            <Text fontSize="xl" fontWeight="900" lineHeight="1">{new Date(banner.data_fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</Text>
+                                                        </HStack>
+                                                    )}
+
+                                                    {(banner.tipo === 'EVENTO' || banner.tipo === 'AVISO') && banner.link_destino && banner.texto_botao && (
+                                                        <Button size="md" rightIcon={<ExternalLinkIcon />} colorScheme={safeCor === 'white' ? 'blue' : 'whiteAlpha'} bg={safeCor === 'white' ? 'blue.500' : 'whiteAlpha.300'} backdropFilter="blur(5px)" _hover={{ bg: safeCor === 'white' ? 'blue.600' : "whiteAlpha.400" }} w="full">
+                                                            {banner.texto_botao}
+                                                        </Button>
+                                                    )}
+                                                </Flex>
+
                                             </Card>
                                         </Box>
-                                    ))}
+                                    )})}
                                 </Flex>
 
-                                {/* DOTS INDICADORES DE PÁGINA (Dentro da caixa do banner, parte inferior) */}
                                 {banners.length > 1 && (
                                     <Flex position="absolute" bottom={1.5} left="50%" transform="translateX(-50%)" zIndex={10} gap={2}>
                                         {banners.map((_, idx) => {
@@ -303,7 +350,7 @@ const PainelAluno = () => {
                 {passo === 'historico' && <AbaHistorico redacoes={redacoes} usuario={usuario} abrirFeedback={abrirFeedback} abrirMotivo={abrirFeedback} />}
                 {passo === 'loja' && <AbaLoja pacotes={pacotes} configsGlobais={configsGlobais} carteira={carteira} carregarDadosIniciais={carregarDadosIniciais} />}
                 {passo === 'material_apoio' && <AbaMaterial materiais={materiais} recarregar={carregarDadosIniciais} />}
-                {abasTreino.includes(passo) && <AbaTreino temas={temas} carteira={carteira} configsGlobais={configsGlobais} carregarDadosIniciais={carregarDadosIniciais} mudarAba={setPasso} setTreinoAtivo={setTreinoAtivo} />}
+                {abasTreino.includes(passo) && <AbaTreino temas={temas} carteira={carteira} configsGlobais={configsGlobais} carregarDadosIniciais={carregarDadosIniciais} setTreinoAtivo={setTreinoAtivo} mudarAba={setPasso} />}
                 
                 {passo === 'feedback' && redacaoSelecionada && (
                     <AbaFeedback redacao={redacaoSelecionada} voltar={() => { setRedacaoSelecionada(null); navigate('?aba=historico'); }} carregarDadosIniciais={carregarDadosIniciais} />
@@ -350,7 +397,7 @@ const PainelAluno = () => {
                                     </Card>
                                 </Box>
                                 
-                                <Box flex="1" w="full" maxW="280px" display="flex" flexDirection="column" justifyContent="center">
+                                <Box flex="1" w="full" maxW="280px" display="flex" flexDirection="column" justify="center">
                                     <Heading size="sm" color="gray.700" mb={2} textAlign="center">Desbloquear Pacote</Heading>
                                     <Text color="gray.500" textAlign="center" mb={6} fontSize="sm">Escolha a sua forma de pagamento abaixo para ativar os seus créditos imediatamente.</Text>
                                     <VStack spacing={4}>

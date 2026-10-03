@@ -12,12 +12,18 @@ import {
 } from '@chakra-ui/react';
 import { 
   SearchIcon, WarningIcon, UnlockIcon, WarningTwoIcon, 
-  StarIcon, ViewIcon, ArrowBackIcon, CheckCircleIcon, EditIcon, RepeatIcon, ViewOffIcon, InfoIcon
+  StarIcon, ViewIcon, ArrowBackIcon, CheckCircleIcon, EditIcon, RepeatIcon, ViewOffIcon, InfoIcon, ChatIcon, CloseIcon
 } from '@chakra-ui/icons';
 
-const INFO_COMPETENCIAS_ENEM = { 1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 2: { nome: "Tema/Estrutura/Repertório", cor: "blue.500", bg: "blue.50" }, 3: { nome: "Argumentação", cor: "orange.500", bg: "orange.50" }, 4: { nome: "Coesão", cor: "green.500", bg: "green.50" }, 5: { nome: "Proposta", cor: "purple.500", bg: "purple.50" } };
-const INFO_COMPETENCIAS_SIMPLES = { 1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 2: { nome: "Estrutura/Tema/Repertório", cor: "blue.500", bg: "blue.50" }, 3: { nome: "Argumentação", cor: "yellow.500", bg: "yellow.50" }, 4: { nome: "Coesão e coerência", cor: "green.500", bg: "green.50" }, };
+const CustomPinSVG = ({ cor, numero }) => (
+  <Box position="relative" w="22px" h="22px" color={cor} filter="drop-shadow(0px 2px 3px rgba(0,0,0,0.3))" transition="all 0.2s" _hover={{ transform: 'scale(1.25)' }}>
+    <Icon viewBox="0 0 24 24" w="100%" h="100%"><path fill="currentColor" d="M4 2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2z"/></Icon>
+    <Text position="absolute" top="5px" left="0" w="100%" textAlign="center" color="white" fontSize="10px" fontWeight="900" fontFamily="system-ui">{numero}</Text>
+  </Box>
+);
 
+const INFO_COMPETENCIAS_ENEM = { 1: { nome: "Gramática", cor: "red.500", bg: "red.50" }, 2: { nome: "Tema/Estrutura/Repertório", cor: "blue.500", bg: "blue.50" }, 3: { nome: "Argumentação", cor: "yellow.500", bg: "yellow.50" }, 4: { nome: "Coesão", cor: "green.500", bg: "green.50" }, 5: { nome: "Proposta", cor: "purple.500", bg: "purple.50" } };
+const INFO_COMPETENCIAS_PADRAO = { 1: { nome: "Domínio da Norma Culta", cor: "red.500", bg: "red.50" }, 2: { nome: "Adequação ao Tema e Estrutura Textual", cor: "blue.500", bg: "blue.50" }, 3: { nome: "Coerência e Argumentação", cor: "yellow.500", bg: "yellow.50" }, 4: { nome: "Coesão Textual", cor: "green.500", bg: "green.50" } };
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
 const formatarTexto = (texto) => {
@@ -31,13 +37,6 @@ const getImagemUrl = (caminho) => {
     if (typeof caminho !== 'string') return '';
     return caminho.startsWith('http') ? caminho : `http://127.0.0.1:8000${caminho}`;
 };
-
-const CustomPinSVG = ({ cor, numero }) => (
-  <Box position="relative" w="30px" h="30px" color={cor} filter="drop-shadow(0px 3px 3px rgba(0,0,0,0.2))" transition="transform 0.2s" _hover={{ transform: 'scale(1.15)' }}>
-    <Icon viewBox="0 0 24 24" w="100%" h="100%"><path fill="currentColor" d="M4 2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2z"/></Icon>
-    <Text position="absolute" top="4.5px" left="2px" w="100%" textAlign="center" color="white" fontSize="12px" fontWeight="900" fontFamily="system-ui">{numero}</Text>
-  </Box>
-);
 
 const getPinTitle = (pin) => {
     if (pin.competencia === 1 && pin.tipo_erro && pin.tipo_erro !== 'Geral') { return `Competência 1 - ${pin.tipo_erro}`; }
@@ -54,7 +53,7 @@ const getCorretorNome = (r) => {
 };
 
 const getSLA = (r) => { 
-    if (!r || !r.data_envio) return { cor: 'gray', texto: '--', badge: 'gray' };
+    if (!r || !r.data_envio || r.status !== 'AGUARDANDO') return { cor: 'gray', texto: '--', badge: 'gray' };
     const data = new Date(r.data_envio); const agora = new Date(); const diffHoras = (agora - data) / (1000 * 60 * 60);
     const isVip = r.is_urgente || r.vip_pago; const limiteAtraso = isVip ? 24 : 72; const limiteAtencao = isVip ? 12 : 48;
     if (diffHoras <= limiteAtencao) return { cor: 'green', texto: 'No Prazo', badge: 'green' }; 
@@ -62,8 +61,16 @@ const getSLA = (r) => {
     return { cor: 'red', texto: 'Atrasado', badge: 'red' }; 
 };
 
-const getStatusBadge = (status) => {
-    switch(status) {
+const getStatusBadge = (status, r) => {
+    const reda = typeof status === 'object' ? status : r;
+    const statusVal = typeof status === 'object' ? status.status : status;
+    
+    if (reda) {
+        const isPaga = reda.foi_pago === true || String(reda.foi_pago).toLowerCase() === 'true';
+        if ((statusVal === 'CORRIGIDA' || statusVal === 'FINALIZADA') && isPaga) return <Badge colorScheme="green" borderRadius="md" px={2} py={1} fontSize="xs">FINALIZADA (PAGA)</Badge>;
+    }
+
+    switch(statusVal) {
         case 'CORRIGIDA': return <Badge colorScheme="green" borderRadius="md" px={2} py={1} fontSize="xs">CORRIGIDA</Badge>;
         case 'DEVOLVIDA': return <Badge colorScheme="orange" borderRadius="md" px={2} py={1} fontSize="xs">DEVOLVIDA (ALUNO)</Badge>;
         case 'ANULADA': return <Badge colorScheme="red" borderRadius="md" px={2} py={1} fontSize="xs">ANULADA (ALUNO)</Badge>;
@@ -76,7 +83,7 @@ const getStatusBadge = (status) => {
         case 'EM_AUDITORIA': return <Badge colorScheme="purple" borderRadius="md" px={2} py={1} fontSize="xs">EM AUDITORIA</Badge>;
         case 'EM_QA': return <Badge colorScheme="teal" borderRadius="md" px={2} py={1} fontSize="xs">INSPEÇÃO QA</Badge>;
         case 'FINALIZADA': return <Badge colorScheme="green" borderRadius="md" px={2} py={1} fontSize="xs">FINALIZADA (PAGA)</Badge>;
-        default: return <Badge colorScheme="gray" borderRadius="md" px={2} py={1} fontSize="xs">{status ? status.replace('_', ' ') : 'AGUARDANDO'}</Badge>;
+        default: return <Badge colorScheme="gray" borderRadius="md" px={2} py={1} fontSize="xs">{statusVal ? statusVal.replace('_', ' ') : 'AGUARDANDO'}</Badge>;
     }
 };
 
@@ -114,13 +121,14 @@ function TorreControle() {
   const [hoveredPinViewId, setHoveredPinViewId] = useState(null);
   const [pinFocadoId, setPinFocadoId] = useState(null);
   const [mostrarPins, setMostrarPins] = useState(true);
+  const [filtroCompetenciaView, setFiltroCompetenciaView] = useState(null);
   
   const [notasEditadas, setNotasEditadas] = useState({});
 
   useEffect(() => {
       if (redacaoAuditando && redacaoAuditando.correcao) {
           let initNotas = {};
-          (redacaoAuditando.correcao.competencias || []).forEach(c => { initNotas[c.comp] = c.nota; });
+          (redacaoAuditando.correcao.competencias || []).forEach(c => { initNotas[c.comp] = parseFloat(c.nota); });
           setNotasEditadas(initNotas);
       }
   }, [redacaoAuditando]);
@@ -150,6 +158,7 @@ function TorreControle() {
           }
       } catch (e) { console.log('Erro ao baixar tema', e); }
 
+      setFiltroCompetenciaView(null);
       setRedacaoAuditoria(redData); 
       setMensagemAcao1(''); 
       setMensagemAcao2('');
@@ -231,9 +240,17 @@ function TorreControle() {
     const matchTexto = (r.tema_titulo || '').toLowerCase().includes(termoBusca) || (r.aluno_nome || '').toLowerCase().includes(termoBusca) || (getCorretorNome(r) || '').toLowerCase().includes(termoBusca) || r.id.toString() === busca;
     
     let matchStatus = true;
-    if (filtroStatus === 'PRESAS') {
+    const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
+
+    if (filtroStatus === 'TODOS') {
+        matchStatus = true;
+    } else if (filtroStatus === 'PRESAS') {
         matchStatus = (r.status === 'EM_CORRECAO' || r.status === 'REFAZER') && r.corretor_atual !== null;
-    } else if (filtroStatus !== 'TODOS') {
+    } else if (filtroStatus === 'FINALIZADA') {
+        matchStatus = (r.status === 'CORRIGIDA' || r.status === 'FINALIZADA') && isPaga;
+    } else if (filtroStatus === 'CORRIGIDA') {
+        matchStatus = r.status === 'CORRIGIDA' && !isPaga;
+    } else {
         matchStatus = r.status === filtroStatus;
     }
 
@@ -269,8 +286,126 @@ function TorreControle() {
   const idxUltimoTriagem = paginaAtualTriagem * itensPorPaginaTriagem; const idxPrimeiroTriagem = idxUltimoTriagem - itensPorPaginaTriagem; const triagemPaginada = listaTriagem.slice(idxPrimeiroTriagem, idxUltimoTriagem);
   const idxUltimoQA = paginaAtualQA * itensPorPaginaQA; const idxPrimeiroQA = idxUltimoQA - itensPorPaginaQA; const qaPaginada = listaQA.slice(idxPrimeiroQA, idxUltimoQA);
 
+  // INTERPRETADOR VISUAL (PARSER PREMIUM) DAS MENSAGENS E ALERTAS
+  const renderAlertasTorre = (textoOriginal) => {
+      if (!textoOriginal) return <Text fontSize="sm" color="gray.500">Sem observações ou alertas registrados.</Text>;
+      
+      let limpo = textoOriginal.replace(/\bNone\b/gi, '').replace(/\[\/?ALERTA_COORDENACAO\]/gi, '').trim();
+      if (limpo.startsWith('"') && limpo.endsWith('"')) { limpo = limpo.substring(1, limpo.length - 1).trim(); }
+      if (!limpo) return null;
+
+      const parts = limpo.split(/(?=\[.*?\]|---.*?---)/).filter(p => p.trim());
+      let finalParts = parts.length > 0 ? parts : [limpo];
+
+      const blocos = finalParts.map((part, idx) => {
+          let conteudo = part.trim();
+          const tUpper = conteudo.toUpperCase();
+          
+          let autor = "SISTEMA";
+          let autorCor = "gray";
+          let tipoAlerta = "Aviso do Sistema";
+          let colorScheme = "gray";
+          let iconeAlerta = InfoIcon;
+          let motivo = null;
+          let labelConteudo = "Observação:";
+
+          if (tUpper.includes("FALHA GRAVE REPORTADA") || tUpper.includes("SINALIZADO")) {
+              autor = "CORRETOR"; autorCor = "orange";
+              tipoAlerta = "FALHA GRAVE";
+              colorScheme = "red";
+              iconeAlerta = WarningTwoIcon;
+              labelConteudo = "OBSERVAÇÃO DO CORRETOR";
+              const motivoMatch = conteudo.match(/\[.*?(?:REPORTADA|SINALIZADO)\s*:\s*(.*?)\]/i) || conteudo.match(/\[(.*?FALHA.*?)\]/i);
+              if (motivoMatch && motivoMatch[1]) motivo = motivoMatch[1].replace(/falha grave reportada/i, '').replace(/^:/, '').trim();
+              conteudo = conteudo.replace(/\[.*?\]/g, '').replace(/Observação do Corretor:/gi, '').trim();
+              
+          } else if (tUpper.includes("RECURSO SOLICITADO")) {
+              autor = "ALUNO"; autorCor = "blue";
+              tipoAlerta = "RECURSO DO ALUNO";
+              colorScheme = "blue";
+              iconeAlerta = ChatIcon;
+              labelConteudo = "MOTIVO DA SOLICITAÇÃO";
+              conteudo = conteudo.replace(/---.*?---/g, '').replace(/\[.*?\]/g, '').replace(/Motivo:/gi, '').trim();
+              
+          } else if (tUpper.includes("TRIAGEM TÉCNICA")) {
+              autor = "CORRETOR"; autorCor = "orange";
+              tipoAlerta = "TRIAGEM TÉCNICA (TI)";
+              colorScheme = "orange";
+              iconeAlerta = WarningIcon;
+              labelConteudo = "OBSERVAÇÃO DO CORRETOR";
+              conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
+              
+          } else if (tUpper.includes("FALHA GRAVE CONFIRMADA") || tUpper.includes("REDAÇÃO DEVOLVIDA") || tUpper.includes("ANULAR_E_DEVOLVER")) {
+              autor = "COORDENAÇÃO"; autorCor = "purple";
+              tipoAlerta = "VEREDITO: ANULADA";
+              colorScheme = "red";
+              iconeAlerta = CloseIcon;
+              labelConteudo = "PARECER DA COORDENAÇÃO";
+              conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
+              
+          } else if (tUpper.includes("RECURSO ACEITE") || tUpper.includes("RECURSO NEGADO") || tUpper.includes("RESPOSTA AO RECURSO")) {
+              autor = "COORDENAÇÃO"; autorCor = "purple";
+              tipoAlerta = "VEREDITO DE RECURSO";
+              colorScheme = "green";
+              iconeAlerta = CheckCircleIcon;
+              labelConteudo = "PARECER DA COORDENAÇÃO";
+              conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
+              
+          } else if (tUpper.includes("EXIGIR_REFACAO")) {
+              autor = "COORDENAÇÃO"; autorCor = "purple";
+              tipoAlerta = "EXIGÊNCIA DE REFAÇÃO";
+              colorScheme = "purple";
+              iconeAlerta = RepeatIcon;
+              labelConteudo = "PARECER DA COORDENAÇÃO";
+              conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
+          } else {
+              const tagMatch = conteudo.match(/^\[(.*?)\]/) || conteudo.match(/^---\s*(.*?)\s*---/);
+              if (tagMatch) {
+                  tipoAlerta = tagMatch[1].trim().toUpperCase();
+                  conteudo = conteudo.replace(tagMatch[0], '').trim();
+              }
+          }
+
+          conteudo = conteudo.replace(/(^"|"$)/g, '').trim();
+          if (!conteudo) return null;
+
+          return (
+              <Box key={idx} bg="white" p={4} borderRadius="xl" border="1px solid" borderColor={`${colorScheme}.200`} shadow="sm" position="relative" overflow="hidden">
+                  <Box position="absolute" left={0} top={0} bottom={0} w="4px" bg={`${colorScheme}.500`} />
+                  
+                  <Flex justify="space-between" align="start" mb={3} pl={2} wrap="wrap" gap={2}>
+                      <VStack align="start" spacing={1}>
+                          <Badge colorScheme={autorCor} fontSize="0.65rem" px={2} borderRadius="sm">{autor}</Badge>
+                          <HStack spacing={2}>
+                              <Icon as={iconeAlerta} color={`${colorScheme}.600`} boxSize={4} />
+                              <Text fontSize="sm" fontWeight="900" color={`${colorScheme}.700`}>{tipoAlerta}</Text>
+                          </HStack>
+                      </VStack>
+                      {motivo && (
+                          <Badge colorScheme={colorScheme} fontSize="xs" px={2} py={1} borderRadius="md" variant="subtle" border="1px solid" borderColor={`${colorScheme}.200`}>
+                              {motivo}
+                          </Badge>
+                      )}
+                  </Flex>
+                  
+                  <Box bg={`${colorScheme}.50`} p={3} borderRadius="md" ml={2} border="1px dashed" borderColor={`${colorScheme}.200`}>
+                      <Text fontSize="2xs" fontWeight="bold" color={`${colorScheme}.600`} mb={1}>{labelConteudo}</Text>
+                      <Text fontSize="sm" color="gray.800" whiteSpace="pre-wrap" fontStyle="italic">"{conteudo}"</Text>
+                  </Box>
+              </Box>
+          );
+      }).filter(Boolean);
+
+      if (blocos.length === 0) return null;
+      return <VStack align="stretch" spacing={4}>{blocos}</VStack>;
+  };
+
   if (redacaoAuditando) {
-    const isSimples = redacaoAuditando.tema_tipo?.toUpperCase() === 'SIMPLES' || redacaoAuditando.tipo?.toUpperCase() === 'SIMPLES';
+    const tipoAtual = redacaoAuditando.tema_tipo?.toUpperCase() || redacaoAuditando.tipo?.toUpperCase() || 'ENEM';
+    const isPadrao = tipoAtual === 'PADRAO_10' || tipoAtual === 'PADRAO_100' || tipoAtual === 'SIMPLES';
+    const isPadrao10 = tipoAtual === 'PADRAO_10';
+    
+    const numComps = isPadrao ? [1,2,3,4] : [1,2,3,4,5];
     const temCorrecaoFeita = redacaoAuditando.correcao && redacaoAuditando.correcao.competencias && redacaoAuditando.correcao.competencias.length > 0;
     
     const isQA = redacaoAuditando.status === 'EM_QA' || redacaoAuditando.status === 'CORRIGIDA'; 
@@ -282,35 +417,67 @@ function TorreControle() {
     const avaliacaoEstrelas = redacaoAuditando.correcao?.avaliacao_aluno || 0;
     const avaliacaoTexto = redacaoAuditando.correcao?.comentario_avaliacao || '';
     
-    const notasPossiveisEdit = isSimples ? [0,5,10,15,20,25] : [0,40,80,120,160,200];
-    const compsDisponiveisEdit = isSimples ? [1,2,3,4] : [1,2,3,4,5];
-    const notaFinalCalculadaEdit = Object.values(notasEditadas).reduce((acc, curr) => acc + Number(curr), 0);
+    const notasPossiveisEdit = isPadrao10 ? [0, 0.5, 1, 1.5, 2, 2.5] : (isPadrao ? [0,5,10,15,20,25] : [0,40,80,120,160,200]);
+    const compsDisponiveisEdit = isPadrao ? [1,2,3,4] : [1,2,3,4,5];
+    const notaFinalCalculadaEdit = Object.values(notasEditadas).reduce((acc, curr) => acc + parseFloat(curr || 0), 0);
 
     const motivadoresTema = redacaoAuditando.tema_completo?.motivadores || [];
     const descricaoProposta = redacaoAuditando.tema_completo?.descricao || '';
 
+    const anotacoes = redacaoAuditando.correcao?.anotacoes || [];
+    const contagem = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, total: anotacoes.length };
+    anotacoes.forEach(pin => { if (pin.competencia) contagem[pin.competencia]++; });
+
     return (
-      <Flex h="100vh" overflow="hidden" w="full" bg="gray.100">
-        <Box flex="1" display="flex" flexDirection="column" bg="gray.200">
+      <Flex h="100vh" overflow="hidden" w="full" bg="gray.100" direction={{ base: 'column', lg: 'row' }}>
+        
+        {/* ============================================== */}
+        {/* COLUNA ESQUERDA (VISUALIZADOR DA AUDITORIA)    */}
+        {/* ============================================== */}
+        <Box flex="1" display="flex" flexDirection="column" bg="gray.200" overflow="hidden">
           
-          <Flex w="full" h="90px" px={8} bg="white" shadow="sm" justify="space-between" align="center" borderBottom="1px solid" borderColor="gray.300" zIndex={10} wrap="nowrap">
-            <HStack spacing={4}>
-                <Button leftIcon={<ArrowBackIcon />} onClick={() => setRedacaoAuditoria(null)} colorScheme="gray" variant="solid" shadow="sm">Voltar</Button>
-                <Button size="sm" onClick={() => setMostrarPins(!mostrarPins)} leftIcon={<Icon as={mostrarPins ? ViewOffIcon : ViewIcon} />} colorScheme="gray" variant="outline" shadow="sm">
-                    {mostrarPins ? "Ocultar Marcações" : "Mostrar Marcações"}
-                </Button>
-                <Button size="sm" colorScheme="blue" variant="outline" leftIcon={<InfoIcon />} onClick={modalProposta.onOpen} shadow="sm">
-                    Ver Proposta
-                </Button>
-            </HStack>
-            <HStack spacing={4}>
-                <Badge bg={isSimples ? 'blue.50' : 'green.50'} color={isSimples ? 'blue.700' : 'green.700'} px={4} py={2} borderRadius="md" fontSize="md">{redacaoAuditando.tema_tipo || redacaoAuditando.tipo || 'ENEM'}</Badge>
-            </HStack>
+          <Flex direction="column" bg="white" shadow="sm" zIndex={10}>
+              <Flex justify="space-between" align="center" p={4} borderBottom="1px solid" borderColor="gray.100" wrap="wrap" gap={3}>
+                  <HStack spacing={4}>
+                      <Button leftIcon={<ArrowBackIcon />} onClick={() => setRedacaoAuditoria(null)} variant="ghost" colorScheme="gray">Voltar</Button>
+                      <Divider orientation="vertical" h="24px" display={{ base: 'none', md: 'block' }} />
+                      <VStack align="start" spacing={0}>
+                          <HStack alignItems="center"><Heading size="md" color="gray.800">Visualização de Auditoria</Heading></HStack>
+                          <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">ALUNO: {redacaoAuditando.aluno_nome}</Text>
+                      </VStack>
+                  </HStack>
+                  <HStack spacing={4}>
+                      <Button size="sm" colorScheme="blue" variant="outline" leftIcon={<InfoIcon />} onClick={modalProposta.onOpen} shadow="sm">Ver Proposta</Button>
+                  </HStack>
+              </Flex>
+
+              <Flex justify="space-between" align="center" px={4} py={2} bg="gray.50" borderBottom="1px solid" borderColor="gray.300">
+                  <HStack spacing={3} overflowX="auto" pb={{base: 2, md: 0}} css={{ '&::-webkit-scrollbar': { display: 'none' } }}>
+                      <Text fontSize="xs" fontWeight="bold" color="gray.600" textTransform="uppercase" whiteSpace="nowrap">Filtrar Marcações:</Text>
+                      <HStack spacing={2}>
+                          <Button size="xs" variant={filtroCompetenciaView === null ? 'solid' : 'outline'} colorScheme="gray" onClick={() => setFiltroCompetenciaView(null)}>Todas ({contagem.total})</Button>
+                          {numComps.map(c => {
+                              const info = isPadrao ? INFO_COMPETENCIAS_PADRAO[c] : INFO_COMPETENCIAS_ENEM[c];
+                              const scheme = info.cor.split('.')[0];
+                              return (
+                                  <Button key={c} size="xs" variant={filtroCompetenciaView === c ? 'solid' : 'outline'} colorScheme={scheme} onClick={() => setFiltroCompetenciaView(c === filtroCompetenciaView ? null : c)}>
+                                      C{c} ({contagem[c]})
+                                  </Button>
+                              );
+                          })}
+                      </HStack>
+                  </HStack>
+                  <Button size="xs" onClick={() => setMostrarPins(!mostrarPins)} leftIcon={<Icon as={mostrarPins ? ViewOffIcon : ViewIcon} />} colorScheme="gray" variant="ghost">
+                      {mostrarPins ? "Ocultar Tudo" : "Mostrar Tudo"}
+                  </Button>
+              </Flex>
           </Flex>
 
           <Box flex="1" overflowY="auto" p={8} display="flex" justifyContent="center">
-            <Box position="relative" display="inline-block" height="fit-content" boxShadow="dark-lg" bg="white" border="1px solid" borderColor="gray.300" borderRadius="sm" w={redacaoAuditando.texto ? "700px" : "full"} maxW={redacaoAuditando.texto ? "700px" : "900px"} flexShrink={redacaoAuditando.texto ? 0 : 1} onClick={() => setPinFocadoId(null)}>
-              {redacaoAuditando.texto ? ( 
+            <Box position="relative" display="inline-block" height="fit-content" boxShadow="dark-lg" bg="white" border="1px solid" borderColor="gray.300" borderRadius="sm" w={redacaoAuditando.arquivo ? "full" : "700px"} maxW={redacaoAuditando.arquivo ? "900px" : "700px"} flexShrink={redacaoAuditando.arquivo ? 1 : 0} onClick={() => setPinFocadoId(null)}>
+              {redacaoAuditando.arquivo ? ( 
+                  <Image src={getImagemUrl(redacaoAuditando.arquivo)} alt="Redação do Aluno" display="block" w="100%" h="auto" objectFit="contain" /> 
+              ) : redacaoAuditando.texto ? (
                   <Box p="0" position="relative" minHeight="1216px" bgImage="linear-gradient(transparent 39px, #ccc 40px)" bgSize="100% 40px">
                       <Box position="absolute" left={0} top={0} bottom={0} w="40px" borderRight="1px solid #ccc" bg="gray.50" pt="8px" pointerEvents="none" zIndex={2}>
                           {Array.from({length: 30}).map((_, i) => (
@@ -321,10 +488,10 @@ function TorreControle() {
                           {redacaoAuditando.texto}
                       </Box>
                   </Box>
-              ) : ( <Image src={getImagemUrl(redacaoAuditando.arquivo)} alt="Redação do Aluno" display="block" w="100%" h="auto" /> )}
+              ) : null}
               
-              {mostrarPins && redacaoAuditando.correcao?.anotacoes?.map((pin) => { 
-                if(!pin.x) return null; const info = isSimples ? INFO_COMPETENCIAS_SIMPLES[pin.competencia] : INFO_COMPETENCIAS_ENEM[pin.competencia]; if(!info) return null; 
+              {mostrarPins && anotacoes.filter(p => filtroCompetenciaView === null || p.competencia === filtroCompetenciaView).map((pin) => { 
+                if(!pin.x) return null; const info = isPadrao ? INFO_COMPETENCIAS_PADRAO[pin.competencia] : INFO_COMPETENCIAS_ENEM[pin.competencia]; if(!info) return null; 
                 
                 const isHovered = hoveredPinViewId === pin.id; 
                 const isFocused = pinFocadoId === pin.id;
@@ -338,7 +505,9 @@ function TorreControle() {
                     {!isFocused && (
                         <Popover trigger="hover" placement="top" openDelay={0} isLazy>
                             <PopoverTrigger>
-                                <Box position="absolute" left={`calc(${pin.x}% + ${pin.width}% - 6px)`} top={`calc(${pin.y}% - 28px)`} cursor="pointer" zIndex={10} display="flex" alignItems="center" justifyContent="center" onClick={(e) => { e.stopPropagation(); setPinFocadoId(pin.id); }} onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}><CustomPinSVG cor={info.cor} numero={pin.competencia} /></Box>
+                                <Box position="absolute" left={`calc(${pin.x}% + ${pin.width}% - 6px)`} top={`calc(${pin.y}% - 22px)`} cursor="pointer" zIndex={isHovered || isFocused ? 9999 : 10} display="flex" alignItems="center" justifyContent="center" onClick={(e) => { e.stopPropagation(); setPinFocadoId(pin.id); }} onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}>
+                                    <CustomPinSVG cor={info.cor} numero={pin.competencia} />
+                                </Box>
                             </PopoverTrigger>
                             <Portal>
                                 <PopoverContent zIndex={9999} w="300px" boxShadow="2xl" borderRadius="2xl" overflow="hidden" border="1px solid" borderColor="gray.100" onMouseEnter={() => setHoveredPinViewId(pin.id)} onMouseLeave={() => setHoveredPinViewId(null)}>
@@ -356,23 +525,37 @@ function TorreControle() {
           </Box>
         </Box>
 
-        <Box w="450px" bg="white" borderLeft="1px solid" borderColor="gray.300" display="flex" flexDirection="column" shadow="2xl" zIndex={10}>
-          <Flex h="90px" px={6} direction="column" justify="center" borderBottom="1px solid" 
-                borderColor={isQA ? "purple.200" : isFalhaGrave ? "red.200" : isRecurso ? "blue.200" : "orange.200"} 
-                bg={isQA ? "purple.50" : isFalhaGrave ? "red.50" : isRecurso ? "blue.50" : "orange.50"}>
-            <Heading size="md" color={isQA ? "purple.700" : isFalhaGrave ? "red.700" : isRecurso ? "blue.700" : "orange.700"} mb={1}>
-                {isQA ? 'Controle de Qualidade' : isFalhaGrave ? 'Julgamento de Falha Grave' : isRecurso ? 'Julgamento de Recurso' : 'Triagem Técnica'}
-            </Heading>
-            <Text fontSize="sm" color={isQA ? "purple.600" : isFalhaGrave ? "red.600" : isRecurso ? "blue.600" : "orange.600"}>
-                {isQA ? 'Inspecione a correção.' : isFalhaGrave ? 'Analise o problema pedagógico relatado.' : isRecurso ? 'O aluno contestou a nota do corretor.' : 'Analise o problema técnico relatado.'}
-            </Text>
+        {/* ============================================== */}
+        {/* COLUNA DIREITA (SIDEBAR DA GESTÃO)             */}
+        {/* ============================================== */}
+        <Box w={{ base: '100%', lg: '450px' }} bg="white" borderLeft="1px solid" borderColor="gray.300" display="flex" flexDirection="column" shadow="2xl" zIndex={20}>
+          
+          <Flex h="90px" px={6} justify="space-between" align="center" borderBottom="1px solid" borderColor="gray.200" bg={isQA ? "purple.50" : isFalhaGrave ? "red.50" : isRecurso ? "blue.50" : "orange.50"} flexShrink={0}>
+              <VStack align="start" spacing={0} justify="center">
+                  <Heading size="md" color={isQA ? "purple.700" : isFalhaGrave ? "red.700" : isRecurso ? "blue.700" : "orange.700"} mb={0}>
+                      {isQA ? 'Qualidade (QA)' : isFalhaGrave ? 'Julgar Falha Grave' : isRecurso ? 'Julgar Recurso' : 'Triagem Técnica'}
+                  </Heading>
+                  <Text fontSize="xs" color={isQA ? "purple.600" : isFalhaGrave ? "red.600" : isRecurso ? "blue.600" : "orange.600"}>
+                      Ação Requerida do Gestor
+                  </Text>
+              </VStack>
+
+              <HStack spacing={3}>
+                  <Badge bg={isPadrao10 ? 'purple.100' : (isPadrao ? 'blue.100' : 'green.100')} color={isPadrao10 ? 'purple.800' : (isPadrao ? 'blue.800' : 'green.800')} px={3} py={1.5} borderRadius="md" fontSize="xs">
+                      {tipoAtual.replace('_', ' ')}
+                  </Badge>
+                  <HStack bg={isFalhaGrave ? "red.100" : "green.100"} px={3} py={1} borderRadius="full" border="1px solid" borderColor={isFalhaGrave ? "red.300" : "green.300"} shadow="sm">
+                      <Text fontSize="2xs" fontWeight="bold" color={isFalhaGrave ? "red.700" : "green.700"}>NOTA</Text>
+                      <Text fontSize="lg" fontWeight="900" color={isFalhaGrave ? "red.800" : "green.800"}>{isFalhaGrave ? '0' : (redacaoAuditando.correcao?.nota_final || 0)}</Text>
+                  </HStack>
+              </HStack>
           </Flex>
 
           <Box flex="1" overflowY="auto" p={6}>
             <VStack align="stretch" spacing={6}>
               <Box bg="gray.50" p={4} borderRadius="md" border="1px solid" borderColor="gray.200">
-                <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Aluno</Text><Text fontWeight="bold" color="gray.800" mb={2}>{redacaoAuditando.aluno_nome}</Text>
-                <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Tema</Text><Text fontSize="sm" color="gray.700" fontWeight="bold">{redacaoAuditando.tema_titulo}</Text>
+                <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Tema Associado</Text>
+                <Text fontSize="sm" color="gray.700" fontWeight="bold">{redacaoAuditando.tema_titulo}</Text>
               </Box>
 
               {isQA && avaliacaoEstrelas > 0 && (
@@ -387,19 +570,20 @@ function TorreControle() {
                 </Box>
               )}
 
-              {!isQA && (
-                <Alert status={isRecurso ? "info" : "warning"} variant="left-accent" borderRadius="md" flexDirection="column" alignItems="start" p={4} border="1px solid" borderColor={isRecurso ? "blue.100" : "orange.100"}>
-                  <HStack mb={2}><WarningIcon color={isRecurso ? "blue.500" : "orange.500"} /><Text fontWeight="bold" fontSize="sm" color={isRecurso ? "blue.800" : "orange.800"}>{isRecurso ? "Mensagem do Aluno (Recurso):" : "Alerta do Corretor:"}</Text></HStack>
-                  <Text fontSize="sm" color={isRecurso ? "blue.700" : "orange.700"} w="full" fontStyle="italic" whiteSpace="pre-wrap">"{redacaoAuditando.correcao?.comentario_geral || 'Sem detalhes fornecidos.'}"</Text>
-                </Alert>
+              {/* CAIXA DE AVISOS E ALERTAS PREMIUM */}
+              {redacaoAuditando.correcao?.comentario_geral && (
+                  <Box>
+                      <Heading size="xs" color="gray.500" mb={3} textTransform="uppercase">Linha do Tempo (Eventos)</Heading>
+                      {renderAlertasTorre(redacaoAuditando.correcao?.comentario_geral)}
+                  </Box>
               )}
 
-              {temCorrecaoFeita && (
+              {temCorrecaoFeita && !isFalhaGrave && (
                 <Box>
-                  <Flex justify="space-between" align="center" mb={3}><Heading size="sm" color="gray.700" textTransform="uppercase">Desempenho Atual</Heading><Badge colorScheme="green" fontSize="md" px={3} py={1} borderRadius="md">Total: {redacaoAuditando.correcao.nota_final} pts</Badge></Flex>
+                  <Heading size="sm" color="gray.700" textTransform="uppercase" mb={3}>Desempenho Atual</Heading>
                   <VStack spacing={3} align="stretch" width="100%" mb={4}>
                     {redacaoAuditando.correcao.competencias.map((comp) => { 
-                      const info = isSimples ? INFO_COMPETENCIAS_SIMPLES[comp.comp] : INFO_COMPETENCIAS_ENEM[comp.comp]; if(!info) return null; 
+                      const info = isPadrao ? INFO_COMPETENCIAS_PADRAO[comp.comp] : INFO_COMPETENCIAS_ENEM[comp.comp]; if(!info) return null; 
                       return (
                         <Box key={comp.comp} p={3} border="1px solid" borderColor="gray.200" borderRadius="md" bg="white">
                           <Flex justify="space-between" mb={1} align="center">
@@ -417,18 +601,19 @@ function TorreControle() {
 
               <Divider borderColor="gray.300" />
 
+              {/* PAINÉIS DE AÇÃO INTELIGENTES */}
               {isFalhaGrave && (
                 <VStack align="stretch" spacing={4}>
                   <Box p={4} border="1px solid" borderColor="red.200" borderRadius="xl" bg="red.50">
                     <HStack mb={2}><CheckCircleIcon color="red.600" /><Text fontSize="sm" fontWeight="bold" color="red.700">1. Confirmar Falha Grave (Zerar)</Text></HStack>
-                    <Text fontSize="xs" color="red.600" mb={3}>A redação será zerada, o aluno perde o crédito e o corretor é pago.</Text>
-                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justificativa do zero (opcional)..." mb={3} />
+                    <Text fontSize="xs" color="red.600" mb={3}>A redação será zerada (Nota 0), o aluno perde o crédito e o corretor é pago pelo serviço de triagem.</Text>
+                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justificativa pedagógica opcional..." mb={3} />
                     <Button w="full" colorScheme="red" onClick={() => resolverAuditoria('CONFIRMAR_FALHA_GRAVE', mensagemAcao1)} isLoading={loadingAudit}>Confirmar e Zerar Redação</Button>
                   </Box>
                   <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
                     <HStack mb={2}><WarningIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">2. Falso Positivo (Discordar)</Text></HStack>
-                    <Text fontSize="xs" color="gray.600" mb={3}>Devolve a redação para o corretor fazer a correção normal.</Text>
-                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Explique ao corretor porque não é falha grave..." mb={3} />
+                    <Text fontSize="xs" color="gray.600" mb={3}>O corretor se enganou. Devolve a redação para o corretor fazer a correção normal.</Text>
+                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Explique ao corretor porque a redação é válida..." mb={3} />
                     <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('DEVOLVER_CORRETOR', mensagemAcao2)} isLoading={loadingAudit}>Devolver ao Corretor</Button>
                   </Box>
                 </VStack>
@@ -438,7 +623,7 @@ function TorreControle() {
                 <VStack align="stretch" spacing={4}>
                   <Box p={4} border="1px solid" borderColor="orange.200" borderRadius="xl" bg="orange.50">
                     <HStack mb={2}><WarningTwoIcon color="orange.600" /><Text fontSize="sm" fontWeight="bold" color="orange.700">1. Problema Confirmado (Anular)</Text></HStack>
-                    <Text fontSize="xs" color="orange.600" mb={3}>A redação é cancelada, e o aluno recebe o crédito de volta no sistema.</Text>
+                    <Text fontSize="xs" color="orange.600" mb={3}>A redação é cancelada, e o aluno recebe o crédito de volta no sistema para enviar outra foto.</Text>
                     <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Recado para o aluno. Ex: Texto ilegível, envie nova foto." mb={3} />
                     <Button w="full" colorScheme="orange" onClick={() => resolverAuditoria('ANULAR_E_DEVOLVER_CREDITO', mensagemAcao1)} isLoading={loadingAudit}>Anular e Estornar Crédito</Button>
                   </Box>
@@ -455,14 +640,14 @@ function TorreControle() {
                 <VStack align="stretch" spacing={4}>
                   <Box p={4} border="1px solid" borderColor="blue.200" borderRadius="xl" bg="blue.50">
                     <HStack mb={2}><CheckCircleIcon color="blue.600" /><Text fontSize="sm" fontWeight="bold" color="blue.700">1. Negar Recurso (Manter Nota)</Text></HStack>
-                    <Text fontSize="xs" color="blue.600" mb={3}>Você defende a correção original. A nota do aluno será mantida.</Text>
-                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justificativa pedagógica para o aluno aceitar a nota..." mb={3} />
+                    <Text fontSize="xs" color="blue.600" mb={3}>A nota original será mantida e a mensagem abaixo será enviada ao ALUNO justificando a decisão.</Text>
+                    <Textarea size="sm" value={mensagemAcao1} onChange={(e) => setMensagemAcao1(e.target.value)} rows={3} bg="white" placeholder="Justificativa pedagógica que será enviada ao ALUNO..." mb={3} />
                     <Button w="full" colorScheme="blue" onClick={() => resolverAuditoria('RECURSO_NEGADO', mensagemAcao1)} isLoading={loadingAudit}>Manter Nota do Corretor</Button>
                   </Box>
                   <Box p={4} border="1px solid" borderColor="purple.200" borderRadius="xl" bg="purple.50">
                     <HStack mb={2}><EditIcon color="purple.600" /><Text fontSize="sm" fontWeight="bold" color="purple.700">2. Aceitar Recurso (Corretor Errou)</Text></HStack>
-                    <Text fontSize="xs" color="purple.600" mb={3}>Devolve a redação ao corretor para que ele ajuste as notas conforme a sua instrução.</Text>
-                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Ex: Professor, ajuste a C3, pois o aluno trouxe repertório válido..." mb={3} />
+                    <Text fontSize="xs" color="purple.600" mb={3}>Devolve a redação ao CORRETOR para que ele ajuste as notas obrigatoriamente lendo a instrução abaixo.</Text>
+                    <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Instrução que será enviada ao CORRETOR para ele ajustar..." mb={3} />
                     <Button w="full" colorScheme="purple" onClick={() => resolverAuditoria('RECURSO_ACEITE', mensagemAcao2)} isLoading={loadingAudit}>Exigir Refação do Corretor</Button>
                   </Box>
                 </VStack>
@@ -498,7 +683,7 @@ function TorreControle() {
                           {compsDisponiveisEdit.map(cNum => (
                               <Box key={cNum} bg="white" p={2} borderRadius="md" border="1px solid" borderColor="green.200" shadow="sm">
                                   <Text fontSize="2xs" fontWeight="bold" color="green.700" mb={1}>COMPETÊNCIA {cNum}</Text>
-                                  <Select size="sm" bg="gray.50" value={notasEditadas[cNum] || 0} onChange={(e) => setNotasEditadas({...notasEditadas, [cNum]: Number(e.target.value)})}>
+                                  <Select size="sm" bg="gray.50" value={notasEditadas[cNum] || 0} onChange={(e) => setNotasEditadas({...notasEditadas, [cNum]: e.target.value})}>
                                       {notasPossiveisEdit.map(n => <option key={n} value={n}>{n} pts</option>)}
                                   </Select>
                               </Box>
@@ -574,7 +759,7 @@ function TorreControle() {
         <Tabs isLazy index={tabIndex} onChange={(i) => setTabIndex(i)}>
           <TabList mb={6} borderBottom="2px solid" borderColor="gray.200" gap={2}>
             <Tab _selected={{ color: 'teal.700', bg: 'teal.50', borderBottom: '3px solid', borderColor: 'teal.500', fontWeight: 'bold' }}>🚦 Gestão da Fila</Tab>
-            <Tab _selected={{ color: 'red.700', bg: 'red.50', borderBottom: '3px solid', borderColor: 'red.500', fontWeight: 'bold' }}>⚖️ Auditoria & Recursos {listaAuditoria.length > 0 && <Badge ml={2} colorScheme="red" borderRadius="full">{listaAuditoria.length}</Badge>}</Tab>
+            <Tab _selected={{ color: 'red.700', bg: 'red.50', borderBottom: '3px solid', borderColor: 'red.500', fontWeight: 'bold' }}>⚖ Auditoria & Recursos {listaAuditoria.length > 0 && <Badge ml={2} colorScheme="red" borderRadius="full">{listaAuditoria.length}</Badge>}</Tab>
             <Tab _selected={{ color: 'orange.700', bg: 'orange.50', borderBottom: '3px solid', borderColor: 'orange.500', fontWeight: 'bold' }}>🛠️ Triagem de T.I. {listaTriagem.length > 0 && <Badge ml={2} colorScheme="orange" borderRadius="full">{listaTriagem.length}</Badge>}</Tab>
             <Tab _selected={{ color: 'purple.700', bg: 'purple.50', borderBottom: '3px solid', borderColor: 'purple.500', fontWeight: 'bold' }}>💎 Qualidade (QA) {listaQA.length > 0 && <Badge ml={2} colorScheme="purple" borderRadius="full">{listaQA.length}</Badge>}</Tab>
           </TabList>
@@ -658,6 +843,11 @@ function TorreControle() {
                     {filaPaginada.map(r => {
                       const sla = getSLA(r); 
                       const corretorNomeStr = getCorretorNome(r);
+                      const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
+
+                      const isVereditoFinal = r.correcao?.comentario_geral?.match(/FALHA GRAVE CONFIRMADA|REDAÇÃO DEVOLVIDA|ANULAR_E_DEVOLVER/i);
+                      const isQAValid = ((r.status === 'CORRIGIDA' && !isPaga) || r.status === 'EM_QA') && !isVereditoFinal;
+
                       return (
                       <Tr key={r.id} _hover={{ bg: 'gray.50' }} bg={r.status === 'REFAZER' ? 'yellow.50' : ((r.is_urgente || r.vip_pago) ? 'purple.50' : 'transparent')}>
                         <Td fontWeight="bold" color="gray.700" px={4}>#{r.id}</Td>
@@ -666,7 +856,7 @@ function TorreControle() {
                             <Text fontSize="xs" color="gray.500" mt={1}>Aluno: <strong>{r.aluno_nome || "Desconhecido"}</strong></Text>
                         </Td>
                         <Td px={3} textAlign="center">
-                          {getStatusBadge(r.status)}
+                          {getStatusBadge(r)}
                           {corretorNomeStr !== 'N/A' && (r.status === 'EM_CORRECAO' || r.status === 'REFAZER' || r.status === 'CORRIGIDA' || r.status === 'FINALIZADA') && (<Text fontSize="2xs" color="blue.600" mt={1} fontWeight="bold">Prof: {corretorNomeStr}</Text>)}
                         </Td>
                         <Td px={3} textAlign="center">
@@ -683,19 +873,16 @@ function TorreControle() {
                         <Td px={3} textAlign="center">
                           <HStack spacing={2} justify="center">
                             
-                            {/* BOTÃO OLHO - PARA ENCERRADAS/CANCELADAS */}
-                            {['DEVOLVIDA', 'ANULADA', 'FINALIZADA'].includes(r.status) && (
+                            {(['DEVOLVIDA', 'ANULADA', 'FINALIZADA'].includes(r.status) || (r.status === 'CORRIGIDA' && isPaga) || isVereditoFinal) && (
                                 <Tooltip label="Ver Detalhes" hasArrow>
                                     <IconButton size="sm" colorScheme="blue" variant="outline" icon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm" />
                                 </Tooltip>
                             )}
 
-                            {/* BOTÃO QA - APENAS PARA CORRIGIDA OU EM QA */}
-                            {['CORRIGIDA', 'EM_QA'].includes(r.status) && (
+                            {isQAValid && (
                                 <Button size="sm" colorScheme="purple" onClick={() => abrirJulgamento(r.id)} shadow="sm">QA</Button>
                             )}
 
-                            {/* FERRAMENTAS DE PRIORIDADE E LIBERAÇÃO */}
                             {['AGUARDANDO', 'EM_CORRECAO', 'REFAZER'].includes(r.status) && (
                                 <>
                                   <Tooltip label={r.vip_pago ? "Urgência comprada (Inalterável)" : (r.is_urgente ? "Remover Urgência" : "Marcar Urgente")} hasArrow><Button size="sm" colorScheme={r.vip_pago || r.is_urgente ? "purple" : "gray"} variant={r.vip_pago || r.is_urgente ? "solid" : "outline"} onClick={() => toggleUrgencia(r)} isDisabled={r.vip_pago}><Icon as={r.vip_pago ? StarIcon : WarningIcon} /></Button></Tooltip>
@@ -720,7 +907,6 @@ function TorreControle() {
               </Box>
             </TabPanel>
 
-            {/* ABA 2: AUDITORIA PEDAGÓGICA */}
             <TabPanel p={0}>
               <Card bg="red.50" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="red.200">
                 <Flex p={4} bg="white" borderBottom="1px solid" borderColor="red.200" justify="space-between" align="center">
@@ -766,7 +952,6 @@ function TorreControle() {
               </Card>
             </TabPanel>
 
-            {/* ABA 3: TRIAGEM TÉCNICA */}
             <TabPanel p={0}>
               <Card bg="orange.50" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="orange.200">
                 <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
@@ -780,7 +965,11 @@ function TorreControle() {
                         </Td>
                         <Td px={4} textAlign="center"><Text fontWeight="bold" color="orange.700" fontSize="sm">{getCorretorNome(r)}</Text></Td>
                         <Td px={4} textAlign="center"><Text fontWeight="medium" fontSize="sm">{r.aluno_nome}</Text></Td>
-                        <Td px={6} textAlign="right"><Button size="sm" colorScheme="orange" leftIcon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm" w="full">Analisar</Button></Td>
+                        <Td px={6} textAlign="right">
+                            <Tooltip label="Analisar Triagem" hasArrow>
+                                <IconButton size="sm" colorScheme="orange" icon={<ViewIcon />} onClick={() => abrirJulgamento(r.id)} shadow="sm" />
+                            </Tooltip>
+                        </Td>
                       </Tr>
                     ))}
                     {triagemPaginada.length === 0 && <Tr><Td colSpan={4} textAlign="center" py={10} color="gray.500">Nenhum problema técnico reportado!</Td></Tr>}
@@ -796,7 +985,6 @@ function TorreControle() {
               </Card>
             </TabPanel>
 
-            {/* ABA 4: CONTROLE DE QUALIDADE */}
             <TabPanel p={0}>
               <Card bg="purple.50" shadow="sm" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="purple.200">
                 <Flex p={4} bg="white" borderBottom="1px solid" borderColor="purple.200" justify="space-between" align="center" wrap="wrap" gap={3}>

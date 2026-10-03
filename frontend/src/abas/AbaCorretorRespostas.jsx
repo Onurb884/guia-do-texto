@@ -5,7 +5,7 @@ import axios from 'axios';
 
 const ERROS_GRAMATICA = [{ label: 'Ortografia', value: 'ORTOGRAFIA' }, { label: 'Acentuação', value: 'ACENTUACAO' }, { label: 'Pontuação', value: 'PONTUACAO' }, { label: 'Concordância', value: 'CONCORDANCIA' }, { label: 'Regência', value: 'REGENCIA' }, { label: 'Crase', value: 'CRASE' }, { label: 'Colocação Pronominal', value: 'COLOCACAO_PRONOMINAL' }, { label: 'Translineação', value: 'TRANSLINEACAO' }, { label: 'Impropriedade Vocabular', value: 'IMPROPRIEDADE_VOCABULAR' }, { label: 'Outros', value: 'OUTROS' }];
 const COMPETENCIAS_ENEM = [{ id: 1, nome: '1. Gramática' }, { id: 2, nome: '2. Tema/Estrutura' }, { id: 3, nome: '3. Argumentação' }, { id: 4, nome: '4. Coesão' }, { id: 5, nome: '5. Proposta' }];
-const COMPETENCIAS_SIMPLES = [{ id: 1, nome: '1. Gramática' }, { id: 2, nome: '2. Estrutura e tema' }, { id: 3, nome: '3. Argumentação' }, { id: 4, nome: '4. Coesão/Coerência' }];
+const COMPETENCIAS_PADRAO = [{ id: 1, nome: '1. Domínio da Norma Culta' }, { id: 2, nome: '2. Adequação ao Tema e Estrutura' }, { id: 3, nome: '3. Coerência e Argumentação' }, { id: 4, nome: '4. Coesão Textual' }];
 
 const AbaCorretorRespostas = ({ todasRespostas, setTodasRespostas }) => {
     const toast = useToast();
@@ -63,6 +63,8 @@ const AbaCorretorRespostas = ({ todasRespostas, setTodasRespostas }) => {
         return matchBusca && matchModelo && matchContexto; 
     });
 
+    const isPadrao = novoModeloResp === 'PADRAO_100' || novoModeloResp === 'PADRAO_10' || novoModeloResp === 'SIMPLES';
+
     return (
         <Container maxW="container.xl" py={8}>
             <Flex justify="space-between" align="center" mb={6} wrap="wrap" gap={4}>
@@ -72,14 +74,19 @@ const AbaCorretorRespostas = ({ todasRespostas, setTodasRespostas }) => {
 
             <Flex mb={6} gap={4} bg="white" p={5} borderRadius="xl" boxShadow="sm" align="center" border="1px solid" borderColor="gray.100" wrap="wrap">
                 <InputGroup size="md" flex={1} minW="250px"><InputLeftElement pointerEvents='none'><SearchIcon color='gray.400' /></InputLeftElement><Input placeholder="Buscar por título ou texto..." value={buscaResposta} onChange={(e) => setBuscaResposta(e.target.value)} /></InputGroup>
-                <Select w="180px" value={filtroRespModelo} onChange={e => setFiltroRespModelo(e.target.value)}><option value="TODOS">Modelo: Todos</option><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option></Select>
+                <Select w="180px" value={filtroRespModelo} onChange={e => setFiltroRespModelo(e.target.value)}>
+                    <option value="TODOS">Modelo: Todos</option>
+                    <option value="ENEM">ENEM</option>
+                    <option value="PADRAO_100">Padrão 100 pts</option>
+                    <option value="PADRAO_10">Padrão 10 pts</option>
+                </Select>
                 <Select w="180px" value={filtroRespContexto} onChange={e => setFiltroRespContexto(e.target.value)}><option value="TODOS">Contexto: Todos</option><option value="GERAL">Comentário Final</option><option value="PIN">Apontamento (Pin)</option></Select>
             </Flex>
             
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
                 {respostasFiltradas.map(r => (
                     <Card key={r.id} shadow="sm" border="1px solid" borderColor="gray.200" position="relative" overflow="hidden" _hover={{ shadow: 'md', transform: 'translateY(-2px)' }} transition="all 0.2s">
-                        <Box h="4px" w="full" bg={r.modelo === 'ENEM' ? "teal.400" : "blue.400"} />
+                        <Box h="4px" w="full" bg={r.modelo === 'ENEM' ? "teal.400" : (r.modelo === 'PADRAO_10' ? 'purple.400' : 'blue.400')} />
                         <CardBody>
                             <Flex justify="space-between" align="start" mb={2}>
                                 <Badge colorScheme={r.contexto === 'GERAL' ? 'purple' : 'orange'} fontSize="2xs">{r.contexto === 'GERAL' ? 'COMENTÁRIO' : 'PIN'}</Badge>
@@ -109,8 +116,8 @@ const AbaCorretorRespostas = ({ todasRespostas, setTodasRespostas }) => {
                     <ModalBody py={6}>
                         <VStack spacing={4} align="stretch">
                             <SimpleGrid columns={2} spacing={4}>
-                                <FormControl><FormLabel fontSize="xs" fontWeight="bold">Modelo</FormLabel><Select size="sm" value={novoModeloResp} onChange={e => setNovoModeloResp(e.target.value)}><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option></Select></FormControl>
-                                <FormControl><FormLabel fontSize="xs" fontWeight="bold">Competência</FormLabel><Select size="sm" value={novaCompResp} onChange={e => setNovaCompResp(parseInt(e.target.value))}>{(novoModeloResp === 'ENEM' ? COMPETENCIAS_ENEM : COMPETENCIAS_SIMPLES).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></FormControl>
+                                <FormControl><FormLabel fontSize="xs" fontWeight="bold">Modelo</FormLabel><Select size="sm" value={novoModeloResp} onChange={e => setNovoModeloResp(e.target.value)}><option value="ENEM">ENEM</option><option value="PADRAO_100">Padrão 100</option><option value="PADRAO_10">Padrão 10</option></Select></FormControl>
+                                <FormControl><FormLabel fontSize="xs" fontWeight="bold">Competência</FormLabel><Select size="sm" value={novaCompResp} onChange={e => setNovaCompResp(parseInt(e.target.value))}>{(isPadrao ? COMPETENCIAS_PADRAO : COMPETENCIAS_ENEM).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></FormControl>
                             </SimpleGrid>
                             <FormControl><FormLabel fontSize="xs" fontWeight="bold">Contexto de Uso</FormLabel><Select size="sm" value={novoContextoResp} onChange={e => setNovoContextoResp(e.target.value)}><option value="GERAL">Comentário Final (Competência)</option><option value="PIN">Apontamento (Pin na Imagem)</option></Select></FormControl>
                             {novoModeloResp === 'ENEM' && novaCompResp === 1 && novoContextoResp === 'PIN' && (<FormControl isRequired><FormLabel fontSize="xs" fontWeight="bold" color="red.600">Erro Gramatical</FormLabel><Select size="sm" placeholder="Selecione o erro específico..." value={novoTipoErroResp} onChange={e => setNovoTipoErroResp(e.target.value)} bg="red.50" borderColor="red.200">{ERROS_GRAMATICA.map(erro => <option key={erro.value} value={erro.value}>{erro.label}</option>)}</Select></FormControl>)}

@@ -22,7 +22,8 @@ from .views_gestao import (
     GestaoUsuariosViewSet, TemaViewSet, PacoteViewSet, BannerVitrineViewSet, 
     CupomViewSet, MaterialApoioViewSet, ConfiguracaoView, GestaoRedacoesView, 
     ToggleUrgenciaView, ForcarLiberacaoView, ResolverAuditoriaView, 
-    AdicionarCreditoManualView, GestaoFinanceiraView, BaixarPagamentoView, RecusarReciboView
+    AdicionarCreditoManualView, GestaoFinanceiraView, BaixarPagamentoView, RecusarReciboView,
+    AgendarPagamentoView, LiquidarLoteView, GabaritoPinViewSet
 )
 
 router = DefaultRouter()
@@ -33,6 +34,7 @@ router.register(r'gestao/pacotes', PacoteViewSet, basename='gestao-pacotes')
 router.register(r'gestao/banners', BannerVitrineViewSet, basename='gestao-banners')
 router.register(r'gestao/cupons', CupomViewSet, basename='gestao-cupons')
 router.register(r'materiais', MaterialApoioViewSet, basename='materiais')
+router.register(r'gestao/gabarito-pins', GabaritoPinViewSet, basename='gabarito-pins')
 
 urlpatterns = [
     # AUTH & USER PROFILE
@@ -87,4 +89,6 @@ urlpatterns = [
     path('gestao/financeiro/dashboard/', GestaoFinanceiraView.as_view(), name='gestao_financeira_dashboard'),
     path('gestao/financeiro/baixar-pagamento/<int:pk>/', BaixarPagamentoView.as_view(), name='financeiro-baixar-pagamento'),
     path('gestao/financeiro/recusar-recibo/<int:pk>/', RecusarReciboView.as_view(), name='financeiro-recusar-recibo'),
+    path('gestao/financeiro/agendar-pagamento/<int:pk>/', AgendarPagamentoView.as_view(), name='agendar_pagamento'),
+    path('gestao/financeiro/liquidar-lote/', LiquidarLoteView.as_view(), name='liquidar_lote'),
 ]

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Flex, Box } from '@chakra-ui/react'; 
 import GestaoMateriais from './GestaoMateriais';
+import GestaoGabarito from './GestaoGabarito';
 import Home from './Home';
 
 import axios from 'axios';
@@ -100,6 +101,7 @@ function App() {
           <Route path="/painel-aluno" element={<PainelAluno />} />
           <Route path="/painel-corretor" element={<PainelCorretor />} />
           <Route path="/temas" element={<GerenciarTemas />} />
+          <Route path="/gestao-gabarito" element={<GestaoGabarito />} />
           <Route path="/gestao-materiais" element={<GestaoMateriais />} />
           <Route path="/corretor/respostas" element={<GerenciarRespostas />} />
           <Route path="/gestao-fila" element={<TorreControle />} /> 

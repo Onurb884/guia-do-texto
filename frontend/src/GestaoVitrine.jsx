@@ -5,9 +5,9 @@ import {
   useToast, Flex, Badge, Card, SimpleGrid, useDisclosure, Modal, ModalOverlay, 
   ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
   FormControl, FormLabel, Input, Select, IconButton, Tabs, TabList, TabPanels, Tab, TabPanel, Switch, Textarea, Divider, Image,
-  InputGroup, InputLeftAddon, InputRightAddon, InputLeftElement
+  InputGroup, InputLeftAddon, InputRightAddon, InputLeftElement, Slider, SliderTrack, SliderFilledTrack, SliderThumb
 } from '@chakra-ui/react';
-import { AddIcon, EditIcon, DeleteIcon, TimeIcon, CalendarIcon, AttachmentIcon, SettingsIcon, SearchIcon } from '@chakra-ui/icons';
+import { AddIcon, EditIcon, DeleteIcon, TimeIcon, CalendarIcon, AttachmentIcon, SettingsIcon, SearchIcon, LinkIcon } from '@chakra-ui/icons';
 
 function GestaoVitrine() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -34,7 +34,7 @@ function GestaoVitrine() {
 
   // Modais de Itens
   const modalBanner = useDisclosure();
-  const [formBanner, setFormBanner] = useState({ id: null, tipo: 'OFERTA', titulo: '', descricao: '', cor_fundo: 'linear(to-br, orange.400, red.400)', pacote_vinculado: '', data_fim: '', ativo: true });
+  const [formBanner, setFormBanner] = useState({ id: null, tipo: 'OFERTA', titulo: '', descricao: '', cor_fundo: 'linear(to-br, orange.400, red.400)', pacote_vinculado: '', data_fim: '', link_destino: '', texto_botao: '', opacidade_pelicula: 60, cor_pelicula: 'black', ativo: true });
   const [arquivoBase64, setArquivoBase64] = useState(''); 
   const fileInputRef = useRef(null);
 
@@ -122,10 +122,10 @@ function GestaoVitrine() {
 
       if (b) {
           const dataFimFormatada = b.data_fim ? b.data_fim.split('T')[0] + 'T' + b.data_fim.split('T')[1].substring(0,5) : '';
-          setFormBanner({...b, data_fim: dataFimFormatada, pacote_vinculado: b.pacote_vinculado || ''});
+          setFormBanner({...b, data_fim: dataFimFormatada, pacote_vinculado: b.pacote_vinculado || '', link_destino: b.link_destino || '', texto_botao: b.texto_botao || '', opacidade_pelicula: b.opacidade_pelicula ?? 60, cor_pelicula: b.cor_pelicula || 'black' });
           setArquivoBase64(b.imagem_fundo || ''); 
       } else {
-          setFormBanner({ id: null, tipo: 'OFERTA', titulo: '', descricao: '', cor_fundo: 'linear(to-br, orange.400, red.400)', pacote_vinculado: '', data_fim: '', ativo: true });
+          setFormBanner({ id: null, tipo: 'OFERTA', titulo: '', descricao: '', cor_fundo: 'linear(to-br, orange.400, red.400)', pacote_vinculado: '', data_fim: '', link_destino: '', texto_botao: '', opacidade_pelicula: 60, cor_pelicula: 'black', ativo: true });
       }
       modalBanner.onOpen();
   };
@@ -133,10 +133,28 @@ function GestaoVitrine() {
   const salvarBanner = async () => {
       try {
           const token = localStorage.getItem('token');
-          const payload = { tipo: formBanner.tipo, titulo: formBanner.titulo, descricao: formBanner.descricao || '', cor_fundo: formBanner.cor_fundo, ativo: formBanner.ativo, imagem_fundo: arquivoBase64 || '', pacote_vinculado: formBanner.pacote_vinculado || null, data_fim: formBanner.data_fim || null };
+          // Limpa links ou pacotes se o tipo não os suportar
+          const payload = { 
+              tipo: formBanner.tipo, 
+              titulo: formBanner.titulo, 
+              descricao: formBanner.descricao || '', 
+              cor_fundo: formBanner.cor_fundo, 
+              ativo: formBanner.ativo, 
+              imagem_fundo: arquivoBase64 || '', 
+              pacote_vinculado: formBanner.tipo === 'OFERTA' ? (formBanner.pacote_vinculado || null) : null, 
+              data_fim: formBanner.data_fim || null,
+              link_destino: formBanner.tipo === 'EVENTO' || formBanner.tipo === 'AVISO' ? formBanner.link_destino : '',
+              texto_botao: formBanner.texto_botao || '',
+              opacidade_pelicula: formBanner.opacidade_pelicula || 60,
+              cor_pelicula: formBanner.cor_pelicula || 'black'
+          };
+
           if (formBanner.id) await axios.patch(`http://127.0.0.1:8000/api/gestao/banners/${formBanner.id}/`, payload, { headers: { Authorization: `Bearer ${token}` } });
           else await axios.post('http://127.0.0.1:8000/api/gestao/banners/', payload, { headers: { Authorization: `Bearer ${token}` } });
-          toast({ title: "Campanha salva!", status: "success" }); modalBanner.onClose(); carregarBanners();
+          
+          toast({ title: "Campanha salva!", status: "success" }); 
+          modalBanner.onClose(); 
+          carregarBanners();
       } catch (e) { toast({ title: "Erro ao salvar", status: "error" }); }
   };
 
@@ -214,11 +232,55 @@ function GestaoVitrine() {
                         {bannersFiltrados.map(b => {
                             const isExpirado = b.data_fim && new Date(b.data_fim).getTime() < new Date().getTime();
                             const mostrarOverlay = !b.ativo || isExpirado;
+                            
+                            let badgeInfo = { cor: 'blue', texto: '📢 AVISO GERAL' };
+                            if (b.tipo === 'OFERTA') badgeInfo = { cor: 'red', texto: '⚡ OFERTA LIMITADA' };
+                            if (b.tipo === 'EVENTO') badgeInfo = { cor: 'green', texto: '📅 AULÃO/EVENTO' };
+
                             return (
                             <Card key={b.id} shadow="xl" borderRadius="2xl" border="none" overflow="hidden" position="relative" minH="200px" opacity={mostrarOverlay ? 0.6 : 1}>
-                                {b.imagem_fundo ? (<><Image src={b.imagem_fundo} position="absolute" top={0} left={0} w="100%" h="100%" objectFit="cover" zIndex={0} pointerEvents="none" /><Box position="absolute" top={0} left={0} w="100%" h="100%" bgGradient="linear(to-r, rgba(0,0,0,0.9), rgba(0,0,0,0.4))" zIndex={1} pointerEvents="none" /></>) : (<Box position="absolute" top={0} left={0} w="100%" h="100%" bgGradient={b.cor_fundo} zIndex={0} pointerEvents="none" />)}
+                                
+                                {/* LÓGICA PERFEITA DE RENDERIZAÇÃO DE COR/DEGRADÊ */}
+                                {b.imagem_fundo ? (
+                                    <>
+                                        <Image src={b.imagem_fundo} position="absolute" top={0} left={0} w="100%" h="100%" objectFit="cover" zIndex={0} pointerEvents="none" />
+                                        <Box 
+                                            position="absolute" top={0} left={0} w="100%" h="100%" 
+                                            bgGradient={b.cor_pelicula?.includes('linear') ? b.cor_pelicula : 'none'}
+                                            bg={!b.cor_pelicula?.includes('linear') ? (b.cor_pelicula || 'black') : undefined}
+                                            opacity={(b.opacidade_pelicula ?? 60) / 100}
+                                            zIndex={1} pointerEvents="none" 
+                                        />
+                                    </>
+                                ) : (
+                                    <Box position="absolute" top={0} left={0} w="100%" h="100%" bgGradient={b.cor_fundo} zIndex={0} pointerEvents="none" />
+                                )}
+
                                 {mostrarOverlay && (<Box position="absolute" inset={0} bg="blackAlpha.600" zIndex={2} display="flex" flexDirection="column" alignItems="center" justifyContent="center" pointerEvents="none">{!b.ativo && <Badge colorScheme="red" fontSize="lg" px={4} py={2} borderRadius="md" mb={2} shadow="md">INATIVO</Badge>}{b.ativo && isExpirado && <Badge colorScheme="orange" fontSize="lg" px={4} py={2} borderRadius="md" shadow="md">EXPIRADO</Badge>}</Box>)}
-                                <Box p={6} color="white" position="relative" zIndex={3} display="flex" flexDirection="column" h="full"><Flex justify="space-between" align="start" mb={4}><Badge colorScheme={b.tipo === 'EVENTO' ? 'green' : (b.tipo === 'OFERTA' ? 'red' : 'blue')} px={3} py={1} borderRadius="full">{b.tipo}</Badge><HStack><IconButton size="sm" icon={<EditIcon />} colorScheme="whiteAlpha" variant="solid" onClick={() => abrirModalBanner(b)} /><IconButton size="sm" icon={<DeleteIcon />} colorScheme="red" variant="solid" onClick={() => excluirBanner(b.id)} /></HStack></Flex><Heading size="md" mb={2} lineHeight="tight" noOfLines={2} textShadow={b.imagem_fundo ? "0px 2px 4px rgba(0,0,0,0.8)" : "none"}>{b.titulo}</Heading><Text fontSize="sm" opacity={0.9} mb={4} noOfLines={3}>{b.descricao}</Text><VStack align="stretch" spacing={2} mt="auto" bg="blackAlpha.400" backdropFilter="blur(4px)" p={3} borderRadius="lg">{b.tipo === 'OFERTA' && b.pacote_info && (<Text fontSize="xs" fontWeight="bold">📦 Ligado a: {b.pacote_info.nome}</Text>)}{b.data_fim ? (<HStack><Icon as={b.tipo === 'EVENTO' ? CalendarIcon : TimeIcon} color={isExpirado ? "orange.300" : "white"} /><Text fontSize="xs" fontWeight="bold" color={isExpirado ? "orange.300" : "white"}>{isExpirado ? 'Expirou em:' : (b.tipo === 'EVENTO' ? 'Data do Evento:' : 'Expira:')} {new Date(b.data_fim).toLocaleString()}</Text></HStack>) : (<HStack><Icon as={TimeIcon} /><Text fontSize="xs" fontWeight="bold">Campanha Permanente</Text></HStack>)}</VStack></Box>
+                                
+                                <Box p={6} color="white" position="relative" zIndex={3} display="flex" flexDirection="column" h="full">
+                                    <Flex justify="space-between" align="start" mb={4}>
+                                        <Badge colorScheme={badgeInfo.cor} px={3} py={1} borderRadius="full">{badgeInfo.texto}</Badge>
+                                        <HStack>
+                                            <IconButton size="sm" icon={<EditIcon />} colorScheme="whiteAlpha" variant="solid" onClick={() => abrirModalBanner(b)} />
+                                            <IconButton size="sm" icon={<DeleteIcon />} colorScheme="red" variant="solid" onClick={() => excluirBanner(b.id)} />
+                                        </HStack>
+                                    </Flex>
+                                    
+                                    <Heading size="md" mb={2} lineHeight="tight" noOfLines={2} textShadow={b.imagem_fundo ? "0px 2px 4px rgba(0,0,0,0.8)" : "none"}>{b.titulo}</Heading>
+                                    <Text fontSize="sm" opacity={0.9} mb={4} noOfLines={3}>{b.descricao}</Text>
+                                    
+                                    <VStack align="stretch" spacing={2} mt="auto" bg="blackAlpha.400" backdropFilter="blur(4px)" p={3} borderRadius="lg">
+                                        {b.tipo === 'OFERTA' && b.pacote_info && (<Text fontSize="xs" fontWeight="bold">📦 Ligado a: {b.pacote_info.nome}</Text>)}
+                                        {b.texto_botao && (<Text fontSize="xs" fontWeight="bold" color="green.200">🔘 Botão: "{b.texto_botao}"</Text>)}
+                                        {b.link_destino && (<Text fontSize="xs" fontWeight="bold" isTruncated color="blue.200">🔗 Link: {b.link_destino}</Text>)}
+                                        {b.data_fim ? (
+                                            <HStack><Icon as={b.tipo === 'EVENTO' ? CalendarIcon : TimeIcon} color={isExpirado ? "orange.300" : "white"} /><Text fontSize="xs" fontWeight="bold" color={isExpirado ? "orange.300" : "white"}>{isExpirado ? 'Expirou em:' : (b.tipo === 'EVENTO' ? 'Data do Evento:' : 'Expira:')} {new Date(b.data_fim).toLocaleString()}</Text></HStack>
+                                        ) : (
+                                            <HStack><Icon as={TimeIcon} /><Text fontSize="xs" fontWeight="bold">Campanha Permanente</Text></HStack>
+                                        )}
+                                    </VStack>
+                                </Box>
                             </Card>
                         )})}
                         {bannersFiltrados.length === 0 && <Text color="gray.500" gridColumn="1 / -1" textAlign="center">Nenhuma campanha encontrada.</Text>}
@@ -309,8 +371,8 @@ function GestaoVitrine() {
             </ModalContent>
         </Modal>
 
-        {/* MODAL BANNER */}
-        <Modal isOpen={modalBanner.isOpen} onClose={modalBanner.onClose} isCentered size="3xl">
+        {/* MODAL BANNER COM PREVIEW SUPER WIDE (1500x250) */}
+        <Modal isOpen={modalBanner.isOpen} onClose={modalBanner.onClose} isCentered size="4xl" scrollBehavior="inside">
             <ModalOverlay backdropFilter="blur(3px)" />
             <ModalContent borderRadius="xl">
                 <ModalHeader>{formBanner.id ? 'Editar Campanha' : 'Nova Campanha'}</ModalHeader>
@@ -322,11 +384,27 @@ function GestaoVitrine() {
                             <Heading size="sm" color="gray.500" borderBottom="1px solid" borderColor="gray.200" pb={2}>Conteúdo e Visual</Heading>
                             
                             <FormControl bg="gray.50" p={3} borderRadius="md" border="1px dashed" borderColor="gray.300">
-                                <FormLabel fontSize="sm" fontWeight="bold">Imagem de Fundo (Opcional)</FormLabel>
+                                <FormLabel fontSize="sm" fontWeight="bold">Upload de Imagem (1500x250px)</FormLabel>
                                 {arquivoBase64 ? (
-                                    <VStack align="start" spacing={3} mt={2}>
-                                        <Image src={arquivoBase64} w="full" h="100px" objectFit="cover" borderRadius="md" border="1px solid #ccc" alt="Preview" />
-                                        <Button size="sm" colorScheme="red" variant="outline" leftIcon={<DeleteIcon />} onClick={removerImagem}>Remover Imagem</Button>
+                                    <VStack align="stretch" spacing={3} mt={2}>
+                                        <Box position="relative" w="full" aspectRatio="745/113" borderRadius="md" overflow="hidden" border="1px solid #ccc" bg="gray.200" shadow="sm">
+                                            <Image src={arquivoBase64} position="absolute" w="full" h="full" objectFit="cover" />
+                                            
+                                            {/* Preview Inteligente de Película */}
+                                            <Box 
+                                                position="absolute" w="full" h="full" 
+                                                bgGradient={formBanner.cor_pelicula?.includes('linear') ? formBanner.cor_pelicula : 'none'}
+                                                bg={!formBanner.cor_pelicula?.includes('linear') ? (formBanner.cor_pelicula || 'black') : undefined}
+                                                opacity={(formBanner.opacidade_pelicula ?? 60) / 100} 
+                                                pointerEvents="none" 
+                                            />
+                                            
+                                            <VStack position="absolute" w="full" h="full" justify="center" align="start" px={4} spacing={0}>
+                                                <Heading size="sm" color={formBanner.cor_pelicula === 'white' ? 'black' : 'white'} noOfLines={1} textShadow={formBanner.cor_pelicula === 'white' ? 'none' : "1px 1px 2px rgba(0,0,0,0.8)"}>{formBanner.titulo || 'Seu Título Aqui'}</Heading>
+                                                <Text fontSize="xs" color={formBanner.cor_pelicula === 'white' ? 'gray.700' : 'whiteAlpha.900'} noOfLines={1} textShadow={formBanner.cor_pelicula === 'white' ? 'none' : "1px 1px 2px rgba(0,0,0,0.8)"}>{formBanner.descricao || 'Sua descrição aqui...'}</Text>
+                                            </VStack>
+                                        </Box>
+                                        <Button size="sm" colorScheme="red" variant="outline" onClick={removerImagem}>Remover / Trocar Imagem</Button>
                                     </VStack>
                                 ) : (
                                     <Flex align="center">
@@ -334,8 +412,45 @@ function GestaoVitrine() {
                                         <Input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" p={1} border="none" ref={fileInputRef} onChange={handleImageUpload} />
                                     </Flex>
                                 )}
-                                <Text fontSize="2xs" color="gray.500" mt={3} lineHeight="shorter">Formatos aceitos: <b>PNG, JPG, WEBP</b>.<br/>Dimensões ideais: <b>1200x400 pixels</b>.</Text>
                             </FormControl>
+
+                            {/* CONTROLES DE PELÍCULA APENAS SE HOUVER IMAGEM */}
+                            {arquivoBase64 && (
+                                <Box p={3} bg="blue.50" borderRadius="md" border="1px solid" borderColor="blue.100">
+                                    <Text fontSize="xs" fontWeight="bold" color="blue.800" mb={3}>Controle de Contraste (Película)</Text>
+                                    
+                                    <FormControl mb={3}>
+                                        <Select size="sm" bg="white" value={formBanner.cor_pelicula} onChange={e=>setFormBanner({...formBanner, cor_pelicula: e.target.value})}>
+                                            <option value="black">Película Preta (Clássica)</option>
+                                            <option value="white">Película Branca (Clarear Imagem)</option>
+                                            <option value="blue.900">Película Azul Escura</option>
+                                            <option value="linear(to-r, purple.700, blue.600)">Degradê Roxo para Azul</option>
+                                            <option value="linear(to-r, orange.500, red.600)">Degradê Laranja para Vermelho</option>
+                                            <option value="linear(to-r, teal.500, green.600)">Degradê Verde Água</option>
+                                        </Select>
+                                    </FormControl>
+
+                                    <HStack>
+                                        <Text fontSize="xs" fontWeight="bold">Intensidade: {formBanner.opacidade_pelicula}%</Text>
+                                        <Slider flex="1" value={formBanner.opacidade_pelicula} min={0} max={95} step={5} onChange={(val) => setFormBanner({...formBanner, opacidade_pelicula: val})}>
+                                            <SliderTrack bg="blue.200"><SliderFilledTrack bg="blue.500" /></SliderTrack>
+                                            <SliderThumb boxSize={4} />
+                                        </Slider>
+                                    </HStack>
+                                </Box>
+                            )}
+
+                            {!arquivoBase64 && (
+                                <FormControl>
+                                    <FormLabel fontSize="sm" fontWeight="bold">Cor de Fundo (Se não houver imagem)</FormLabel>
+                                    <Select value={formBanner.cor_fundo} onChange={e=>setFormBanner({...formBanner, cor_fundo: e.target.value})}>
+                                        <option value="linear(to-br, orange.400, red.400)">Laranja para Vermelho</option>
+                                        <option value="linear(to-br, purple.500, pink.400)">Roxo para Rosa</option>
+                                        <option value="linear(to-br, teal.400, blue.500)">Verde para Azul</option>
+                                        <option value="linear(to-br, gray.700, gray.900)">Preto Dark (Black Friday)</option>
+                                    </Select>
+                                </FormControl>
+                            )}
 
                             <FormControl>
                                 <FormLabel fontSize="sm" fontWeight="bold">Título Principal</FormLabel>
@@ -344,32 +459,23 @@ function GestaoVitrine() {
                             
                             <FormControl>
                                 <FormLabel fontSize="sm" fontWeight="bold">Descrição Curta</FormLabel>
-                                <Textarea rows={3} value={formBanner.descricao} onChange={e=>setFormBanner({...formBanner, descricao: e.target.value})} placeholder="Ex: Quarta-feira, ao vivo no Zoom. Garanta sua vaga com desconto especial." />
+                                <Textarea rows={3} value={formBanner.descricao} onChange={e=>setFormBanner({...formBanner, descricao: e.target.value})} placeholder="Ex: Quarta-feira, ao vivo no Zoom." />
                             </FormControl>
                         </VStack>
 
                         <VStack spacing={5} align="stretch">
-                            <Heading size="sm" color="gray.500" borderBottom="1px solid" borderColor="gray.200" pb={2}>Regras da Campanha</Heading>
+                            <Heading size="sm" color="gray.500" borderBottom="1px solid" borderColor="gray.200" pb={2}>Regras da Campanha e Botões</Heading>
                             
                             <FormControl>
                                 <FormLabel fontSize="sm" fontWeight="bold">Tipo de Banner</FormLabel>
-                                <Select value={formBanner.tipo} onChange={e=>setFormBanner({...formBanner, tipo: e.target.value})} bg="gray.50">
-                                    <option value="EVENTO">Evento / Aulão (Mostra Data)</option>
-                                    <option value="OFERTA">Oferta Relâmpago (Mostra Cronômetro)</option>
-                                    <option value="AVISO">Aviso Simples (Apenas Texto)</option>
+                                <Select value={formBanner.tipo} onChange={e=>setFormBanner({...formBanner, tipo: e.target.value, pacote_vinculado: '', link_destino: ''})} bg="gray.50">
+                                    <option value="EVENTO">Evento / Aulão (Data Visível)</option>
+                                    <option value="OFERTA">Oferta Relâmpago (Vende Pacote)</option>
+                                    <option value="AVISO">Aviso Simples (Sem botão)</option>
                                 </Select>
                             </FormControl>
 
-                            <FormControl>
-                                <FormLabel fontSize="sm" fontWeight="bold">Cor de Fundo Base</FormLabel>
-                                <Select value={formBanner.cor_fundo} onChange={e=>setFormBanner({...formBanner, cor_fundo: e.target.value})}>
-                                    <option value="linear(to-br, orange.400, red.400)">Laranja para Vermelho</option>
-                                    <option value="linear(to-br, purple.500, pink.400)">Roxo para Rosa</option>
-                                    <option value="linear(to-br, teal.400, blue.500)">Verde para Azul</option>
-                                    <option value="linear(to-br, gray.700, gray.900)">Preto Dark (Black Friday)</option>
-                                </Select>
-                            </FormControl>
-                            
+                            {/* LÓGICA DE AÇÕES (OFERTA VS EVENTO) */}
                             {formBanner.tipo === 'OFERTA' && (
                                 <FormControl p={3} bg="orange.50" borderRadius="md" border="1px solid" borderColor="orange.200">
                                     <FormLabel fontSize="sm" color="orange.800" fontWeight="bold">Ao clicar, vender qual pacote?</FormLabel>
@@ -377,6 +483,24 @@ function GestaoVitrine() {
                                         {pacotes.filter(p => p.ativo).map(p => <option key={p.id} value={p.id}>{p.nome} (R$ {p.preco})</option>)}
                                     </Select>
                                 </FormControl>
+                            )}
+
+                            {(formBanner.tipo === 'EVENTO' || formBanner.tipo === 'AVISO') && (
+                                <Box p={3} bg="blue.50" borderRadius="md" border="1px solid" borderColor="blue.200">
+                                    <FormControl mb={3}>
+                                        <FormLabel fontSize="sm" color="blue.800" fontWeight="bold">Link do Botão (Opcional)</FormLabel>
+                                        <InputGroup size="sm">
+                                            <InputLeftElement><LinkIcon color="blue.500" /></InputLeftElement>
+                                            <Input bg="white" placeholder="https://meet.google.com/..." value={formBanner.link_destino} onChange={e=>setFormBanner({...formBanner, link_destino: e.target.value})} />
+                                        </InputGroup>
+                                    </FormControl>
+                                    {formBanner.link_destino && (
+                                        <FormControl>
+                                            <FormLabel fontSize="xs" color="blue.800" fontWeight="bold">Texto do Botão</FormLabel>
+                                            <Input size="sm" bg="white" placeholder="Ex: Entrar na Aula" value={formBanner.texto_botao} onChange={e=>setFormBanner({...formBanner, texto_botao: e.target.value})} />
+                                        </FormControl>
+                                    )}
+                                </Box>
                             )}
                             
                             {(formBanner.tipo === 'OFERTA' || formBanner.tipo === 'EVENTO') && (

@@ -29,11 +29,7 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
     const historicoFiltrado = redacoes.filter(r => {
         const termoBusca = buscaHistorico.toLowerCase();
         const matchBusca = (r.tema_titulo || '').toLowerCase().includes(termoBusca) || String(r.id).includes(termoBusca);
-        
-        // MÁGICA: Para o aluno, se o filtro for CORRIGIDA, deve incluir as que foram para QA
-        const matchStatus = statusFiltro === 'TODOS' ? true : 
-                            (statusFiltro === 'CORRIGIDA' ? (r.status === 'CORRIGIDA' || r.status === 'EM_QA') : r.status === statusFiltro);
-        
+        const matchStatus = statusFiltro === 'TODOS' ? true : (statusFiltro === 'CORRIGIDA' ? (r.status === 'CORRIGIDA' || r.status === 'EM_QA') : r.status === statusFiltro);
         const tipoRedacao = r.tema_tipo || r.tipo || 'ENEM';
         const matchTipo = tipoFiltro === 'TODOS' ? true : tipoRedacao.toUpperCase() === tipoFiltro;
         
@@ -96,8 +92,11 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
                     <Input placeholder="Buscar Tema ou Cód..." value={buscaHistorico} onChange={e => {setBuscaHistorico(e.target.value); setPaginaAtualHist(1);}} />
                 </InputGroup>
                 
-                <Select w="150px" value={tipoFiltro} onChange={e => {setTipoFiltro(e.target.value); setPaginaAtualHist(1);}}>
-                    <option value="TODOS">Tipo: Todos</option><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option>
+                <Select w="180px" value={tipoFiltro} onChange={e => {setTipoFiltro(e.target.value); setPaginaAtualHist(1);}}>
+                    <option value="TODOS">Tipo: Todos</option>
+                    <option value="ENEM">ENEM</option>
+                    <option value="PADRAO_100">Padrão 100</option>
+                    <option value="PADRAO_10">Padrão 10</option>
                 </Select>
                 
                 <Select w="150px" value={statusFiltro} onChange={e => {setStatusFiltro(e.target.value); setPaginaAtualHist(1);}}>
@@ -137,14 +136,17 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
                         <Tbody>
                             {historicoPaginado.map(red => {
                                 const tipoRedacao = red.tema_tipo || red.tipo || 'ENEM';
-                                // Verificamos se o aluno avaliou (Se a nota de avaliacao existir OU o status for EM_QA que é gerado por avaliacoes ruins)
                                 const foiAvaliada = red.correcao?.avaliacao_aluno > 0 || red.status === 'EM_QA';
 
                                 return (
                                     <Tr key={red.id} _hover={{ bg: 'gray.50' }}>
                                         <Td fontWeight="bold" color="gray.500" px={4}>#{red.id}</Td>
                                         <Td fontWeight="medium" isTruncated px={4} title={red.tema_titulo}>{red.tema_titulo} {red.vip_pago && <Badge ml={2} colorScheme="purple" fontSize="2xs"><StarIcon mr={1}/>VIP</Badge>}</Td>
-                                        <Td px={3} textAlign="center"><Badge bg={tipoRedacao === 'ENEM' ? 'green.50' : 'blue.50'} color={tipoRedacao === 'ENEM' ? 'green.700' : 'blue.700'} px={2} py={1} borderRadius="md" fontWeight="bold" letterSpacing="wide" fontSize="xs">{tipoRedacao}</Badge></Td>
+                                        <Td px={3} textAlign="center">
+                                            <Badge bg={tipoRedacao === 'ENEM' ? 'green.50' : (tipoRedacao === 'PADRAO_10' ? 'purple.50' : 'blue.50')} color={tipoRedacao === 'ENEM' ? 'green.700' : (tipoRedacao === 'PADRAO_10' ? 'purple.700' : 'blue.700')} px={2} py={1} borderRadius="md" fontWeight="bold" letterSpacing="wide" fontSize="xs">
+                                                {tipoRedacao.replace('_', ' ')}
+                                            </Badge>
+                                        </Td>
                                         <Td fontSize="sm" px={3} color="gray.600" textAlign="center">{new Date(red.data_envio).toLocaleDateString()}</Td>
                                         <Td px={3} textAlign="center">
                                             <VStack spacing={1}>
@@ -152,7 +154,7 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
                                                 {foiAvaliada && <Text fontSize="2xs" color="gray.500" fontWeight="bold"><StarIcon color="yellow.400" mr={1} mb={0.5}/>Avaliado</Text>}
                                             </VStack>
                                         </Td>
-                                        <Td fontWeight="bold" px={3} textAlign="center" color={red.nota_final >= 900 ? 'green.500' : 'gray.700'}>
+                                        <Td fontWeight="bold" px={3} textAlign="center" color={red.nota_final !== null && red.nota_final !== undefined ? 'green.500' : 'gray.700'}>
                                             {red.nota_final !== null && red.nota_final !== undefined ? red.nota_final : '-'}
                                         </Td>
                                         <Td px={4} textAlign="center">

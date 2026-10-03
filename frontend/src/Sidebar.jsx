@@ -7,7 +7,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { 
     CheckCircleIcon, StarIcon, 
-    ChevronLeftIcon, ChevronRightIcon, WarningTwoIcon
+    ChevronLeftIcon, ChevronRightIcon, WarningTwoIcon, AttachmentIcon
 } from '@chakra-ui/icons';
 
 // Ícones Customizados Premium (Padrão Ouro)
@@ -53,7 +53,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   }, [location.search]);
 
   const handleOpenProfile = () => {
-      // Agora apenas navegamos para a rota completa do Meu Perfil
       navigate('/meu-perfil');
   };
 
@@ -139,6 +138,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                 <MenuButton path="/temas" icon={CheckCircleIcon} label="Banco de Propostas" />
                 <MenuButton path="/gestao-materiais" icon={IconBook} label="Materiais de Apoio" />
                 <MenuButton path="/gestao-fila" icon={WarningTwoIcon} label="Torre de Controle" />
+                {/* NOVA ABA GABARITO DE PINS INSERIDA AQUI */}
+                <MenuButton path="/gestao-gabarito" icon={AttachmentIcon} label="Gabarito de Pins" />
                 <MenuButton path="/gestao-vitrine" icon={StarIcon} label="Catálogo & E-commerce" />
                 <MenuButton path="/gestao-usuarios" icon={UsersIcon} label="Base de Usuários" />
             </Box>

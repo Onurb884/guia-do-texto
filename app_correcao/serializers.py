@@ -4,8 +4,14 @@ from .models import Redacao, Tema, Correcao, NotaCompetencia, Anotacao, TextoMot
 from .models import RespostaRapida, ConfiguracaoSistema, Carteira, Transacao, Pacote, Cupom, CarteiraAluno
 from .models import BannerVitrine, HistoricoCompra
 from .models import MaterialApoio, PagamentoCorretor
+from .models import GabaritoPin
 
 User = get_user_model()
+
+class GabaritoPinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GabaritoPin
+        fields = '__all__'
 
 class MaterialApoioSerializer(serializers.ModelSerializer):
     class Meta:
@@ -63,7 +69,7 @@ class PagamentoCorretorSerializer(serializers.ModelSerializer):
             if c.redacao.id not in redacoes_vistas:
                 redacoes_vistas.add(c.redacao.id)
                 tipo = c.redacao.tema.tipo if c.redacao.tema else 'ENEM'
-                base = val_simples if tipo == 'SIMPLES' else val_enem
+                base = val_simples if tipo in ['SIMPLES', 'PADRAO_100', 'PADRAO_10'] else val_enem
                 is_vip = c.redacao.is_urgente or getattr(c.redacao, 'vip_pago', False)
                 bonus = val_vip if is_vip else 0
                 
@@ -137,7 +143,7 @@ class CarteiraSerializer(serializers.ModelSerializer):
             if c.redacao.id not in redacoes_vistas:
                 redacoes_vistas.add(c.redacao.id)
                 tipo = c.redacao.tema.tipo if c.redacao.tema else 'ENEM'
-                base = val_simples if tipo == 'SIMPLES' else val_enem
+                base = val_simples if tipo in ['SIMPLES', 'PADRAO_100', 'PADRAO_10'] else val_enem
                 is_vip = c.redacao.is_urgente or getattr(c.redacao, 'vip_pago', False)
                 bonus = val_vip if is_vip else 0
                 descricao = f"Correção {tipo} (#{c.redacao.id})"

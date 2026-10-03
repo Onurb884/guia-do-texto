@@ -327,7 +327,8 @@ function GerenciarTemas() {
                             <FormLabel fontWeight="bold" color="gray.700">Modelo de Correção</FormLabel>
                             <Select value={temaAtual.tipo} onChange={e => setTemaAtual({...temaAtual, tipo: e.target.value})} size="lg" bg={temaAtual.tipo === 'ENEM' ? 'green.50' : 'blue.50'} focusBorderColor="teal.500">
                                 <option value="ENEM">ENEM (1000 pts)</option>
-                                <option value="SIMPLES">Simples (100 pts)</option>
+                                <option value="PADRAO_100">Padrão 100 pts</option>
+                                <option value="PADRAO_10">Padrão 10 pts</option>
                             </Select>
                         </FormControl>
 

@@ -6,7 +6,7 @@ import {
   useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, 
   ModalCloseButton, ModalBody, ModalFooter, VStack, FormControl, 
   FormLabel, InputGroup, InputLeftAddon, Input, InputRightAddon, Divider,
-  Tabs, TabList, TabPanels, Tab, TabPanel, Textarea, HStack, Select, InputLeftElement
+  Tabs, TabList, TabPanels, Tab, TabPanel, Textarea, HStack, Select, InputLeftElement, Tooltip
 } from '@chakra-ui/react';
 import { 
   CheckCircleIcon, ArrowUpIcon, TimeIcon, SettingsIcon, SearchIcon, ViewIcon, WarningTwoIcon, DownloadIcon
@@ -18,6 +18,7 @@ const GestaoFinanceira = () => {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processandoId, setProcessandoId] = useState(null);
+  const [liquidandoLote, setLiquidandoLote] = useState(false);
   const [buscaHistorico, setBuscaHistorico] = useState('');
   const toast = useToast();
 
@@ -32,13 +33,13 @@ const GestaoFinanceira = () => {
   const [cnpj, setCnpj] = useState('');
   const [salvandoConfig, setSalvandoConfig] = useState(false);
 
-  // GUARDAMOS AS TAXAS EM MEMÓRIA PARA O CÁLCULO DO RECIBO
   const [taxasPlataforma, setTaxasPlataforma] = useState({ enem: 4.00, simples: 3.00, vip: 1.50 });
 
   const modalAnalise = useDisclosure();
   const [pagamentoEmAnalise, setPagamentoEmAnalise] = useState(null);
   const [motivoRecusa, setMotivoRecusa] = useState('');
   const [recusando, setRecusando] = useState(false);
+  const [dataAgendamento, setDataAgendamento] = useState('');
 
   const modalRecibo = useDisclosure();
   const [reciboVisualizar, setReciboVisualizar] = useState(null);
@@ -46,6 +47,9 @@ const GestaoFinanceira = () => {
   const [filtroDataAuditoria, setFiltroDataAuditoria] = useState('MES_ATUAL');
   const [dtInicioAuditoria, setDtInicioAuditoria] = useState('');
   const [dtFimAuditoria, setDtFimAuditoria] = useState('');
+  
+  // NOVO: Filtro Rápido para a Aba da Folha
+  const [filtroFolha, setFiltroFolha] = useState('TODOS');
 
   const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
@@ -97,7 +101,6 @@ const GestaoFinanceira = () => {
       const res = await axios.get('http://127.0.0.1:8000/api/gestao/financeiro/dashboard/', { headers: { Authorization: `Bearer ${token}` } });
       setDados(res.data);
       
-      // Carrega as taxas de pagamento em background para fazermos os cálculos locais
       try {
           const cfgRes = await axios.get('http://127.0.0.1:8000/api/gestao/configuracoes/', { headers: { Authorization: `Bearer ${token}` } });
           setTaxasPlataforma({
@@ -120,14 +123,42 @@ const GestaoFinanceira = () => {
       return () => clearInterval(interval);
   }, []);
 
-  const abrirAnalise = (pagamento) => { setPagamentoEmAnalise(pagamento); setMotivoRecusa(''); setRecusando(false); modalAnalise.onOpen(); };
+  const abrirAnalise = (pagamento) => { 
+      setPagamentoEmAnalise(pagamento); 
+      setMotivoRecusa(''); 
+      setRecusando(false); 
+      setDataAgendamento(''); 
+      modalAnalise.onOpen(); 
+  };
 
-  const confirmarBaixaReal = async () => {
+  const agendarPagamentoReal = async () => {
+    if (!dataAgendamento) return toast({ title: "Atenção", description: "Selecione uma data para agendar o pagamento.", status: "warning" });
+    setProcessandoId(pagamentoEmAnalise.pagamento_id);
+    try {
+        const token = localStorage.getItem('token');
+        await axios.post(`http://127.0.0.1:8000/api/gestao/financeiro/agendar-pagamento/${pagamentoEmAnalise.pagamento_id}/`, { data_prevista: dataAgendamento }, { headers: { Authorization: `Bearer ${token}` } });
+        toast({ title: 'Pagamento Agendado!', description: `O recibo foi aprovado e agendado para ${dataAgendamento.split('-').reverse().join('/')}.`, status: 'success' });
+        carregarDados();
+        modalAnalise.onClose();
+    } catch (error) { toast({ title: 'Erro ao agendar', status: 'error' }); } finally { setProcessandoId(null); }
+  };
+
+  const liquidarLoteReal = async () => {
+    setLiquidandoLote(true);
+    try {
+        const token = localStorage.getItem('token');
+        const res = await axios.post(`http://127.0.0.1:8000/api/gestao/financeiro/liquidar-lote/`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        toast({ title: 'Lote Liquidado!', description: res.data.mensagem, status: 'success' });
+        carregarDados();
+    } catch (error) { toast({ title: 'Erro ao liquidar lote', status: 'error' }); } finally { setLiquidandoLote(false); }
+  };
+
+  const confirmarBaixaImediata = async () => {
     setProcessandoId(pagamentoEmAnalise.pagamento_id);
     try {
       const token = localStorage.getItem('token');
       await axios.post(`http://127.0.0.1:8000/api/gestao/financeiro/baixar-pagamento/${pagamentoEmAnalise.pagamento_id}/`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      toast({ title: 'Pagamento Finalizado!', description: `A carteira foi subtraída e o recibo arquivado.`, status: 'success' });
+      toast({ title: 'Pagamento Finalizado!', description: `A carteira foi destravada e o recibo arquivado.`, status: 'success' });
       carregarDados();
     } catch (error) { toast({ title: 'Erro ao baixar pagamento', status: 'error' }); } finally { setProcessandoId(null); modalAnalise.onClose(); }
   };
@@ -170,16 +201,12 @@ const GestaoFinanceira = () => {
       setSalvandoConfig(false);
   };
 
-  // ==============================================================================
-  // A MÁGICA DE CÁLCULO DAS REDAÇÕES NO FRONTEND
-  // ==============================================================================
   const abrirModalRedacoes = async (reciboItem) => {
     setReciboVisualizar({ ...reciboItem, loading: true });
     modalRecibo.onOpen();
 
     try {
         const token = localStorage.getItem('token');
-        // Usamos a lista geral de redações para pescar as deste professor
         const res = await axios.get('http://127.0.0.1:8000/api/gestao/redacoes/', {
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -187,21 +214,18 @@ const GestaoFinanceira = () => {
         const todasRedacoes = res.data;
         const dataReferencia = new Date(reciboItem.data_solicitacao || reciboItem.data_pagamento || reciboItem.data);
 
-        // Filtra as redações que ele corrigiu antes desse pagamento
         let redaDoProfessor = todasRedacoes.filter(r => 
             r.corretor_nome === reciboItem.corretor_nome &&
             ['CORRIGIDA', 'EM_QA', 'FINALIZADA'].includes(r.status) &&
             new Date(r.data_envio) <= dataReferencia
         );
 
-        // Puxa as mais antigas primeiro (Primeiras a entrar = Primeiras a serem pagas)
         redaDoProfessor.sort((a, b) => new Date(a.data_envio).getTime() - new Date(b.data_envio).getTime());
 
         let normaisAContar = reciboItem.qtd_normal || 0;
         let vipsAContar = reciboItem.qtd_vip || 0;
         let redaFinais = [];
 
-        // Monta o detalhe da tabela com a quantidade cobrada no recibo
         for (let r of redaDoProfessor) {
             if (normaisAContar === 0 && vipsAContar === 0) break;
 
@@ -222,7 +246,6 @@ const GestaoFinanceira = () => {
             }
         }
 
-        // Mostra na tabela da mais recente para a mais antiga
         redaFinais.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
         setReciboVisualizar({ ...reciboItem, redacoes: redaFinais, loading: false });
@@ -242,6 +265,10 @@ const GestaoFinanceira = () => {
       return matchBusca && matchData && matchStatus;
   }) || [];
 
+  const hojeIso = new Date().toISOString().split('T')[0];
+  const lotePendente = dados?.folha_pagamento?.filter(p => p.status_pagamento === 'AGENDADO' && p.data_prevista_pagamento <= hojeIso) || [];
+  const valorTotalLote = lotePendente.reduce((acc, curr) => acc + curr.valor_a_receber, 0);
+
   return (
     <Container maxW="container.xl" py={8} px={{ base: 4, md: 8 }}>
       
@@ -254,6 +281,21 @@ const GestaoFinanceira = () => {
           Configurações da Plataforma
         </Button>
       </Flex>
+
+      {lotePendente.length > 0 && (
+          <Alert status="warning" variant="solid" borderRadius="xl" mb={6} bg="orange.500" shadow="md">
+              <AlertIcon color="white" />
+              <Flex flex={1} justify="space-between" align="center" wrap="wrap" gap={3}>
+                  <Box color="white">
+                      <Text fontWeight="bold" fontSize="lg">⚠️ Lote de Pagamentos Pendente!</Text>
+                      <Text fontSize="sm">Existem {lotePendente.length} pagamentos agendados no banco para liquidar hoje. Total a baixar: {formatarMoeda(valorTotalLote)}.</Text>
+                  </Box>
+                  <Button size="md" colorScheme="orange" bg="white" color="orange.600" _hover={{ bg: "gray.100" }} onClick={liquidarLoteReal} isLoading={liquidandoLote} shadow="sm">
+                      Liquidar Lote e Avisar Corretores
+                  </Button>
+              </Flex>
+          </Alert>
+      )}
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3, xl: 5 }} spacing={6} mb={10}>
         <Card bg="white" shadow="sm" border="1px solid" borderColor="gray.200" borderRadius="xl" borderTop="4px solid" borderTopColor="green.400"><CardBody><Stat><Flex justify="space-between" align="center" mb={2}><StatLabel color="gray.500" fontWeight="bold" textTransform="uppercase" fontSize="xs">Faturamento (Mês)</StatLabel><Flex bg="green.50" p={2} borderRadius="md"><Icon as={ArrowUpIcon} color="green.500" /></Flex></Flex><StatNumber fontSize="2xl" fontWeight="900" color="gray.700">{formatarMoeda(dados?.faturamento_mes || 0)}</StatNumber><StatHelpText mb={0} color="green.500" fontSize="xs" fontWeight="bold">Dinheiro em caixa</StatHelpText></Stat></CardBody></Card>
@@ -271,38 +313,66 @@ const GestaoFinanceira = () => {
 
         <TabPanels>
             <TabPanel p={0}>
+              <Flex align="center" bg="white" border="1px solid" borderColor="gray.200" borderRadius="xl" justify="space-between" mb={4} p={3} shadow="sm">
+                  <HStack>
+                      <Text color="teal.700" fontSize="sm" fontWeight="bold">Filtrar Lançamentos:</Text>
+                      <Select bg="gray.50" onChange={e => setFiltroFolha(e.target.value)} size="sm" value={filtroFolha} w="220px">
+                          <option value="TODOS">Todos os Pagamentos</option>
+                          <option value="AGUARDANDO_RECIBO">⏳ Aguardando Recibo</option>
+                          <option value="EM_ANALISE">👀 Recibos em Análise</option>
+                          <option value="AGENDADO">📅 Pagamentos Agendados</option>
+                          <option value="RECUSADO">❌ Recibos Recusados</option>
+                      </Select>
+                  </HStack>
+              </Flex>
+
               <Card shadow="sm" borderRadius="xl" border="1px solid" borderColor="gray.200" overflow="hidden" bg="white">
                 <Box overflowX="auto">
-                  {dados?.folha_pagamento && dados.folha_pagamento.length > 0 ? (
-                    <Table variant="simple">
-                      <Thead bg="gray.50"><Tr><Th py={4}>Corretor</Th><Th>Contacto</Th><Th>Dados Bancários</Th><Th textAlign="center">Redações Feitas</Th><Th isNumeric>Valor a Receber</Th><Th textAlign="center" w="180px">Status / Ação</Th></Tr></Thead>
-                      <Tbody>
-                        {dados.folha_pagamento.map((prof) => (
-                          <Tr key={prof.corretor_id} _hover={{ bg: "gray.50" }} bg={prof.status_pagamento === 'EM_ANALISE' ? 'blue.50' : prof.status_pagamento === 'RECUSADO' ? 'red.50' : prof.saque_solicitado ? 'yellow.50' : 'transparent'}>
-                            <Td fontWeight="bold" color="gray.700"><Flex align="center" wrap="wrap">{prof.nome}{prof.saque_solicitado && !prof.status_pagamento && <Badge ml={2} colorScheme="yellow">💰 SOLICITOU SAQUE</Badge>}</Flex></Td>
-                            <Td><Text fontSize="sm" color="gray.600">{prof.email}</Text><Text fontSize="xs" color="gray.400">{prof.telefone}</Text></Td>
-                            <Td>
-                              {prof.chave_pix ? (
-                                <Box><Badge colorScheme="teal" mb={1} px={2} py={0.5} borderRadius="md">PIX {prof.tipo_chave_pix ? `- ${prof.tipo_chave_pix}` : ''}</Badge><Text fontSize="sm" fontWeight="bold" color="gray.700">{prof.chave_pix}</Text></Box>
-                              ) : prof.agencia_conta ? (
-                                <Box><Badge colorScheme="blue" mb={1} px={2} py={0.5} borderRadius="md">BANCÁRIO</Badge><Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">{prof.banco}</Text><Text fontSize="sm" color="gray.700">{prof.agencia_conta}</Text></Box>
-                              ) : (<Text fontSize="xs" color="red.500" fontStyle="italic">Sem dados bancários.</Text>)}
-                            </Td>
-                            <Td textAlign="center"><Badge colorScheme="blue" mr={1}>{prof.qtd_normal} Normal</Badge><Badge colorScheme="purple">{prof.qtd_vip} VIP</Badge></Td>
-                            <Td isNumeric><Badge colorScheme="red" fontSize="sm" px={3} py={1} borderRadius="full">{formatarMoeda(prof.valor_a_receber)}</Badge></Td>
-                            <Td textAlign="center">
-                              {!prof.status_pagamento && prof.saque_solicitado === false && (<Badge colorScheme="gray">Aguardando Corretor</Badge>)}
-                              {prof.status_pagamento === 'AGUARDANDO_RECIBO' && (<Badge colorScheme="yellow" p={1.5} borderRadius="md"><TimeIcon mr={1}/> Aguardando PDF</Badge>)}
-                              {prof.status_pagamento === 'EM_ANALISE' && (<Button size="sm" colorScheme="blue" leftIcon={<ViewIcon />} onClick={() => abrirAnalise(prof)} shadow="sm" animation="pulse 1.5s infinite">Analisar Recibo</Button>)}
-                              {prof.status_pagamento === 'RECUSADO' && (<Badge colorScheme="red" p={1.5} borderRadius="md"><WarningTwoIcon mr={1}/> RECUSADO</Badge>)}
-                            </Td>
-                          </Tr>
-                        ))}
-                      </Tbody>
-                    </Table>
-                  ) : (
-                    <Flex direction="column" align="center" justify="center" p={10} bg="gray.50"><CheckCircleIcon boxSize={10} color="green.400" mb={4} /><Heading size="sm" color="gray.600" mb={1}>Tudo em dia!</Heading><Text color="gray.500" fontSize="sm">Não há nenhum pagamento pendente para os professores neste momento.</Text></Flex>
-                  )}
+                  {(() => {
+                    const folhaFiltrada = dados?.folha_pagamento?.filter(prof => {
+                        if (filtroFolha === 'TODOS') return true;
+                        return prof.status_pagamento === filtroFolha;
+                    }) || [];
+
+                    if (folhaFiltrada.length > 0) {
+                      return (
+                        <Table variant="simple">
+                          <Thead bg="gray.50"><Tr><Th py={4}>Corretor</Th><Th>Contacto</Th><Th>Dados Bancários</Th><Th textAlign="center">Redações Feitas</Th><Th isNumeric>Valor a Receber</Th><Th textAlign="center" w="200px">Status / Ação</Th></Tr></Thead>
+                          <Tbody>
+                            {folhaFiltrada.map((prof) => (
+                              <Tr key={prof.corretor_id} _hover={{ bg: "gray.50" }} bg={prof.status_pagamento === 'EM_ANALISE' ? 'blue.50' : prof.status_pagamento === 'RECUSADO' ? 'red.50' : prof.status_pagamento === 'AGENDADO' ? 'green.50' : 'yellow.50'}>
+                                <Td fontWeight="bold" color="gray.700"><Flex align="center" wrap="wrap">{prof.nome}</Flex></Td>
+                                <Td><Text fontSize="sm" color="gray.600">{prof.email}</Text><Text fontSize="xs" color="gray.400">{prof.telefone}</Text></Td>
+                                <Td>
+                                  {prof.chave_pix ? (
+                                    <Box><Badge colorScheme="teal" mb={1} px={2} py={0.5} borderRadius="md">PIX {prof.tipo_chave_pix ? `- ${prof.tipo_chave_pix}` : ''}</Badge><Text fontSize="sm" fontWeight="bold" color="gray.700">{prof.chave_pix}</Text></Box>
+                                  ) : prof.agencia_conta ? (
+                                    <Box><Badge colorScheme="blue" mb={1} px={2} py={0.5} borderRadius="md">BANCÁRIO</Badge><Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">{prof.banco}</Text><Text fontSize="sm" color="gray.700">{prof.agencia_conta}</Text></Box>
+                                  ) : (<Text fontSize="xs" color="red.500" fontStyle="italic">Sem dados bancários.</Text>)}
+                                </Td>
+                                <Td textAlign="center"><Badge colorScheme="blue" mr={1}>{prof.qtd_normal} Normal</Badge><Badge colorScheme="purple">{prof.qtd_vip} VIP</Badge></Td>
+                                <Td isNumeric><Badge colorScheme="red" fontSize="sm" px={3} py={1} borderRadius="full">{formatarMoeda(prof.valor_a_receber)}</Badge></Td>
+                                <Td textAlign="center">
+                                  {prof.status_pagamento === 'AGUARDANDO_RECIBO' && (<Badge colorScheme="yellow" p={1.5} borderRadius="md"><TimeIcon mr={1}/> Aguardando PDF</Badge>)}
+                                  {prof.status_pagamento === 'EM_ANALISE' && (<Button size="sm" colorScheme="blue" leftIcon={<ViewIcon />} onClick={() => abrirAnalise(prof)} shadow="sm" animation="pulse 1.5s infinite">Analisar Recibo</Button>)}
+                                  {prof.status_pagamento === 'RECUSADO' && (<Badge colorScheme="red" p={1.5} borderRadius="md"><WarningTwoIcon mr={1}/> RECUSADO</Badge>)}
+                                  {prof.status_pagamento === 'AGENDADO' && (
+                                      <Tooltip label={`Pagamento Agendado para ${prof.data_prevista_pagamento?.split('-').reverse().join('/')}`}>
+                                          <Button size="sm" colorScheme="green" variant="outline" leftIcon={<TimeIcon />} onClick={() => abrirAnalise(prof)} shadow="sm">Agendado</Button>
+                                      </Tooltip>
+                                  )}
+                                </Td>
+                              </Tr>
+                            ))}
+                          </Tbody>
+                        </Table>
+                      );
+                    } else {
+                      return (
+                        <Flex direction="column" align="center" justify="center" p={10} bg="gray.50"><CheckCircleIcon boxSize={10} color="green.400" mb={4} /><Heading size="sm" color="gray.600" mb={1}>Tudo em dia!</Heading><Text color="gray.500" fontSize="sm">Não há nenhum pagamento neste status no momento.</Text></Flex>
+                      );
+                    }
+                  })()}
                 </Box>
               </Card>
             </TabPanel>
@@ -330,7 +400,6 @@ const GestaoFinanceira = () => {
                           <Td isNumeric fontWeight="bold" color="green.600">{formatarMoeda(item.valor)}</Td>
                           <Td textAlign="center">
                               <HStack spacing={2} justify="center">
-                                  {/* BOTÃO CHAMA A NOVA FUNÇÃO DE AUTO-CÁLCULO */}
                                   <Button size="sm" colorScheme="blue" variant="solid" leftIcon={<ViewIcon />} onClick={() => abrirModalRedacoes(item)}>Ver Redações</Button>
                                   {item.arquivo_recibo_url ? (
                                       <Button size="sm" colorScheme="teal" variant="outline" leftIcon={<DownloadIcon />} as="a" href={`http://127.0.0.1:8000${item.arquivo_recibo_url}`} target="_blank">PDF</Button>
@@ -350,7 +419,8 @@ const GestaoFinanceira = () => {
         </TabPanels>
       </Tabs>
 
-      <Modal isOpen={modalAnalise.isOpen} onClose={modalAnalise.onClose} isCentered size="xl">
+      {/* MODAL DE ANÁLISE / AGENDAMENTO COM TAMANHO AJUSTADO (md) */}
+      <Modal isOpen={modalAnalise.isOpen} onClose={modalAnalise.onClose} isCentered size="md">
           <ModalOverlay backdropFilter="blur(3px)" />
           <ModalContent borderRadius="xl">
               <ModalHeader bg="blue.50" borderBottom="1px solid" borderColor="blue.100" color="blue.800">Análise Financeira</ModalHeader>
@@ -368,25 +438,41 @@ const GestaoFinanceira = () => {
                               <Box><Text fontSize="xs" fontWeight="bold" color="gray.500">CONTA BANCÁRIA ({pagamentoEmAnalise?.banco})</Text><Text fontWeight="bold" color="gray.800">{pagamentoEmAnalise?.agencia_conta}</Text></Box>
                           )}
                       </Box>
-                      <Button as="a" href={pagamentoEmAnalise?.arquivo_recibo_url ? `http://127.0.0.1:8000${pagamentoEmAnalise.arquivo_recibo_url}` : '#'} target="_blank" size="lg" colorScheme="blue" variant="outline" leftIcon={<ViewIcon />} w="full">Ver PDF do Recibo Assinado</Button>
+                      
+                      <Button as="a" href={pagamentoEmAnalise?.arquivo_recibo_url ? `http://127.0.0.1:8000${pagamentoEmAnalise.arquivo_recibo_url}` : '#'} target="_blank" size="md" colorScheme="blue" variant="outline" leftIcon={<ViewIcon />} w="full">Ver PDF do Recibo Assinado</Button>
+                      
                       {recusando ? (
                           <Box bg="red.50" p={4} borderRadius="md" border="1px solid" borderColor="red.200">
                               <FormLabel fontSize="sm" fontWeight="bold" color="red.700">Qual o problema com o recibo?</FormLabel>
                               <Textarea bg="white" value={motivoRecusa} onChange={e => setMotivoRecusa(e.target.value)} placeholder="Ex: A assinatura está ilegível ou faltou preencher o CPF." rows={3} mb={3} />
                               <HStack><Button size="sm" onClick={() => setRecusando(false)}>Cancelar</Button><Button size="sm" colorScheme="red" onClick={recusarReciboReal} isLoading={processandoId === pagamentoEmAnalise?.pagamento_id}>Confirmar Recusa</Button></HStack>
                           </Box>
-                      ) : (
-                          <HStack spacing={3}>
-                              <Button colorScheme="red" variant="ghost" flex={1} onClick={() => setRecusando(true)}>Recusar Recibo</Button>
-                              <Button colorScheme="green" flex={2} onClick={confirmarBaixaReal} isLoading={processandoId === pagamentoEmAnalise?.pagamento_id}>Já Fiz o PIX e Aprovo</Button>
-                          </HStack>
-                      )}
+                      ) : pagamentoEmAnalise?.status_pagamento === 'EM_ANALISE' ? (
+                          <Box mt={2} p={4} bg="blue.50" borderRadius="md" border="1px solid" borderColor="blue.200">
+                              <FormLabel fontSize="sm" fontWeight="bold" color="blue.800">1. Agendar Pagamento</FormLabel>
+                              <Text fontSize="xs" color="blue.600" mb={3}>Selecione a data para a qual este pagamento foi programado no banco.</Text>
+                              
+                              <HStack mb={4}>
+                                  <Input type="date" bg="white" value={dataAgendamento} onChange={e => setDataAgendamento(e.target.value)} />
+                                  <Button colorScheme="blue" onClick={agendarPagamentoReal} isLoading={processandoId === pagamentoEmAnalise?.pagamento_id} px={6} minW="max-content">Aprovar e Agendar</Button>
+                              </HStack>
+                              
+                              <Divider borderColor="blue.200" mb={3} />
+                              <Button size="sm" variant="ghost" colorScheme="red" onClick={() => setRecusando(true)} w="full">2. Recusar Recibo (Erro no Documento)</Button>
+                          </Box>
+                      ) : pagamentoEmAnalise?.status_pagamento === 'AGENDADO' ? (
+                          <Alert status="success" borderRadius="md" variant="subtle" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center">
+                              <AlertIcon boxSize="40px" mr={0} />
+                              <Heading size="md" mt={2} mb={1}>Pagamento Agendado!</Heading>
+                              <Text fontSize="sm" mb={4}>Programado para liquidar no dia: <strong>{pagamentoEmAnalise?.data_prevista_pagamento?.split('-').reverse().join('/')}</strong>.</Text>
+                              <Button size="sm" colorScheme="green" onClick={confirmarBaixaImediata} isLoading={processandoId === pagamentoEmAnalise?.pagamento_id} variant="outline">Liquidar Imediatamente (Bypass Manual)</Button>
+                          </Alert>
+                      ) : null}
                   </VStack>
               </ModalBody>
           </ModalContent>
       </Modal>
 
-      {/* O NOVO MODAL INTELIGENTE DO FINANCEIRO COM CARREGAMENTO */}
       <Modal isOpen={modalRecibo.isOpen} onClose={modalRecibo.onClose} isCentered size="2xl" scrollBehavior="inside">
         <ModalOverlay backdropFilter="blur(3px)" />
         <ModalContent borderRadius="xl">

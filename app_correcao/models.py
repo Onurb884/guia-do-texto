@@ -13,45 +13,40 @@ class ConfiguracaoSistema(models.Model):
     valor_bonus_vip = models.DecimalField(max_digits=10, decimal_places=2, default=1.50)
     tempo_carrossel_segundos = models.IntegerField(default=6, help_text="Tempo em segundos que cada banner fica na tela")
 
-    # Moeda Unificada e Valores Avulsos
     custo_creditos_vip = models.IntegerField(default=2)
     preco_avulso_normal = models.DecimalField(max_digits=10, decimal_places=2, default=9.90)
     preco_avulso_vip = models.DecimalField(max_digits=10, decimal_places=2, default=14.90)
-    
-    # Texto Promocional Global
     texto_promocional = models.CharField(max_length=255, blank=True, null=True, help_text="Aparecerá na caixa de promoções do aluno")
 
     class Meta:
         verbose_name = 'Configuração do Sistema'
 
 class CustomUser(AbstractUser):
-    # --- NOVAS PERMISSÕES DE ACESSO ---
     is_corretor = models.BooleanField(default=False)
     is_coordenador = models.BooleanField(default=False, help_text="Acesso à Torre de Controle e Gestão de Corretores")
     is_financeiro = models.BooleanField(default=False, help_text="Acesso ao Painel Financeiro e E-commerce")
-    
-    # --- PERFIL REDE SOCIAL ---
     foto_perfil = models.ImageField(upload_to='avatares/', blank=True, null=True)
-
-    # --- DADOS PESSOAIS / FINANCEIROS ---
     telefone = models.CharField(max_length=20, blank=True, null=True)
     cpf = models.CharField(max_length=14, blank=True, null=True)
     chave_pix = models.CharField(max_length=100, blank=True, null=True)
     tipo_chave_pix = models.CharField(max_length=20, blank=True, null=True)
     banco = models.CharField(max_length=50, blank=True, null=True) 
     agencia_conta = models.CharField(max_length=50, blank=True, null=True) 
-    
-    # --- CURRÍCULO DO CORRETOR ---
     minibio = models.TextField(blank=True, null=True)
     curriculo = models.FileField(upload_to='curriculos/', blank=True, null=True)
     formacoes = models.JSONField(default=list, blank=True, null=True)
     experiencias = models.JSONField(default=list, blank=True, null=True)
 
 class Tema(models.Model):
-    TIPO_CHOICES = [('ENEM', 'Dissertação ENEM'), ('SIMPLES', 'Dissertação Simples')]
+    TIPO_CHOICES = [
+        ('ENEM', 'Dissertação ENEM'), 
+        ('PADRAO_100', 'Padrão 100 pts'), 
+        ('PADRAO_10', 'Padrão 10 pts'),
+        ('SIMPLES', 'Simples (Legado)') 
+    ]
     titulo = models.CharField(max_length=200)
     descricao = models.TextField()
-    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='ENEM')
+    tipo = models.CharField(max_length=15, choices=TIPO_CHOICES, default='ENEM')
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     def __str__(self): return self.titulo
@@ -80,7 +75,7 @@ class Redacao(models.Model):
 class Correcao(models.Model):
     redacao = models.OneToOneField(Redacao, on_delete=models.CASCADE, related_name='correcao')
     corretor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    nota_final = models.IntegerField()
+    nota_final = models.FloatField(default=0) 
     comentario_geral = models.TextField(blank=True, null=True)
     data_correcao = models.DateTimeField(auto_now_add=True)
     avaliacao_aluno = models.IntegerField(default=0)
@@ -89,7 +84,7 @@ class Correcao(models.Model):
 class NotaCompetencia(models.Model):
     correcao = models.ForeignKey(Correcao, on_delete=models.CASCADE, related_name='notas_competencias')
     numero_competencia = models.IntegerField()
-    nota = models.IntegerField()
+    nota = models.FloatField(default=0)
     comentario = models.TextField(blank=True, null=True)
 
 class Anotacao(models.Model):
@@ -104,7 +99,7 @@ class Anotacao(models.Model):
 
 class RespostaRapida(models.Model):
     CONTEXTO_CHOICES = [('GERAL', 'Comentário Geral'), ('PIN', 'Observação do Pin')]
-    MODELO_CHOICES = [('ENEM', 'ENEM'), ('SIMPLES', 'Simples')]
+    MODELO_CHOICES = [('ENEM', 'ENEM'), ('PADRAO_100', 'Padrão 100 pts'), ('PADRAO_10', 'Padrão 10 pts'), ('SIMPLES', 'Simples')]
     corretor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='respostas_rapidas')
     modelo = models.CharField(max_length=20, choices=MODELO_CHOICES, default='ENEM')
     competencia = models.IntegerField()
@@ -114,28 +109,19 @@ class RespostaRapida(models.Model):
     texto = models.TextField()
     criado_em = models.DateTimeField(auto_now_add=True)
 
-# =========================================================
-# TABELAS FINANCEIRAS DO CORRETOR
-# =========================================================
-
 class Carteira(models.Model):
     corretor = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='carteira')
     saldo_atual = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     saque_solicitado = models.BooleanField(default=False)
     qtd_normal_pendente = models.IntegerField(default=0)
     qtd_vip_pendente = models.IntegerField(default=0)
-    
     def __str__(self): return f"Carteira - R$ {self.saldo_atual}"
 
 class PagamentoCorretor(models.Model):
-    STATUS_CHOICES = [
-        ('AGUARDANDO_RECIBO', 'Aguardando Recibo Assinado'),
-        ('EM_ANALISE', 'Em Análise pelo Financeiro'),
-        ('PAGO', 'Pagamento Efetuado'),
-        ('RECUSADO', 'Recibo Recusado')
-    ]
+    STATUS_CHOICES = [('AGUARDANDO_RECIBO', 'Aguardando Recibo Assinado'), ('EM_ANALISE', 'Em Análise pelo Financeiro'), ('PAGO', 'Pagamento Efetuado'), ('RECUSADO', 'Recibo Recusado')]
     corretor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pagamentos_recebidos')
     data_solicitacao = models.DateTimeField(auto_now_add=True)
+    data_prevista_pagamento = models.DateField(null=True, blank=True)
     data_pagamento = models.DateTimeField(null=True, blank=True)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
     qtd_normal = models.IntegerField(default=0)
@@ -143,30 +129,24 @@ class PagamentoCorretor(models.Model):
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='AGUARDANDO_RECIBO')
     arquivo_recibo = models.FileField(upload_to='recibos_assinados/', null=True, blank=True)
     motivo_recusa = models.TextField(null=True, blank=True)
-
-    def __str__(self):
-        return f"Pagamento #{self.id} - {self.corretor.username} - {self.status}"
-
-# =========================================================
-# TABELAS: PACOTES, CUPONS, HISTÓRICO E VITRINE
-# =========================================================
+    def __str__(self): return f"Pagamento #{self.id} - {self.corretor.username} - {self.status}"
 
 class Pacote(models.Model):
     nome = models.CharField(max_length=100)
     descricao = models.TextField(blank=True, null=True)
-    preco = models.DecimalField(max_digits=10, decimal_places=2, help_text="Preço real de venda")
-    preco_original = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text="Aparecerá riscado. Ex: De R$ 150 por R$ 99")
+    preco = models.DecimalField(max_digits=10, decimal_places=2)
+    preco_original = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     qtd_creditos_simples = models.IntegerField(default=0)
     qtd_creditos_vip = models.IntegerField(default=0)
     ativo = models.BooleanField(default=True)
     permite_parcelamento = models.BooleanField(default=False)
     max_parcelas = models.IntegerField(default=1)
-    visivel_loja = models.BooleanField(default=True, help_text="Aparece na vitrine comum da loja?")
-    compra_unica = models.BooleanField(default=False, help_text="O aluno só pode comprar este pacote 1 vez na vida?")
-    selo_destaque = models.CharField(max_length=50, blank=True, null=True, help_text="Ex: MAIS VENDIDO, RECOMENDADO")
-    destaque_vitrine = models.BooleanField(default=False, help_text="É uma oferta relâmpago no painel do aluno?")
-    texto_vitrine = models.CharField(max_length=100, blank=True, null=True, help_text="Ex: ⚡ Reta Final 50% OFF")
-    data_fim_promocao = models.DateTimeField(blank=True, null=True, help_text="Para o cronômetro do pacote")
+    visivel_loja = models.BooleanField(default=True)
+    compra_unica = models.BooleanField(default=False)
+    selo_destaque = models.CharField(max_length=50, blank=True, null=True)
+    destaque_vitrine = models.BooleanField(default=False)
+    texto_vitrine = models.CharField(max_length=100, blank=True, null=True)
+    data_fim_promocao = models.DateTimeField(blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
 class HistoricoCompra(models.Model):
@@ -177,20 +157,22 @@ class HistoricoCompra(models.Model):
     descricao = models.CharField(max_length=200, blank=True, null=True) 
 
 class BannerVitrine(models.Model):
-    TIPO_CHOICES = (
-        ('AVISO', 'Aviso (Apenas texto, sem botão de compra)'),
-        ('OFERTA', 'Oferta Relâmpago (Vinculado a um pacote)'),
-        ('EVENTO', 'Evento / Aulão ao Vivo (Calendário)')
-    )
+    TIPO_CHOICES = (('AVISO', 'Aviso'), ('OFERTA', 'Oferta Relâmpago'), ('EVENTO', 'Evento / Aulão'))
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='OFERTA')
-    titulo = models.CharField(max_length=100, help_text="Ex: ⚡ Oferta Relâmpago!")
-    descricao = models.CharField(max_length=200, help_text="Ex: Pacote VIP com 50% OFF", blank=True, null=True)
-    cor_fundo = models.CharField(max_length=50, default="linear(to-br, orange.400, red.400)", help_text="Código de cor do React")
-    imagem_fundo = models.TextField(blank=True, null=True, help_text="Imagem convertida em Base64")
+    titulo = models.CharField(max_length=100)
+    descricao = models.CharField(max_length=200, blank=True, null=True)
+    cor_fundo = models.CharField(max_length=50, default="linear(to-br, orange.400, red.400)")
+    imagem_fundo = models.TextField(blank=True, null=True)
     pacote_vinculado = models.ForeignKey(Pacote, on_delete=models.CASCADE, blank=True, null=True)
-    data_fim = models.DateTimeField(blank=True, null=True, help_text="Quando o cronômetro deve zerar e o banner sumir")
+    data_fim = models.DateTimeField(blank=True, null=True)
     ativo = models.BooleanField(default=True)
-    ordem = models.IntegerField(default=0, help_text="Ordem de exibição no carrossel")
+    ordem = models.IntegerField(default=0)
+    
+    # NOVOS CAMPOS PARA MARKETING PREMIUM
+    link_destino = models.CharField(max_length=255, blank=True, null=True)
+    texto_botao = models.CharField(max_length=50, blank=True, null=True)
+    cor_pelicula = models.CharField(max_length=100, default='black')
+    opacidade_pelicula = models.IntegerField(default=60)
 
 class Cupom(models.Model):
     codigo = models.CharField(max_length=50, unique=True)
@@ -206,17 +188,7 @@ class CarteiraAluno(models.Model):
     saldo_vip = models.IntegerField(default=0)
 
 class MaterialApoio(models.Model):
-    CATEGORIAS_CHOICES = [
-        ('ALUNO_MANUAL', 'Manuais e Cartilhas'),
-        ('ALUNO_REPERTORIO', 'Repertório Sociocultural'),
-        ('ALUNO_GRAMATICA', 'Gramática e Estrutura'),
-        ('ALUNO_EXEMPLOS', 'Redações Nota 1000'),
-        ('CORRETOR_CARTILHA', 'Cartilha Oficial (MEC/Banca)'),
-        ('CORRETOR_REGUA', 'Régua de Penalizações'),
-        ('CORRETOR_DESVIOS', 'Guia de Desvios (Gramática)'),
-        ('CORRETOR_REPERTORIO', 'Guia de Repertórios Aceitos'),
-        ('CORRETOR_COMUNICADO', 'Comunicados de Alinhamento'),
-    ]
+    CATEGORIAS_CHOICES = [('ALUNO_MANUAL', 'Manuais e Cartilhas'), ('ALUNO_REPERTORIO', 'Repertório Sociocultural'), ('ALUNO_GRAMATICA', 'Gramática e Estrutura'), ('ALUNO_EXEMPLOS', 'Redações Nota 1000'), ('CORRETOR_CARTILHA', 'Cartilha Oficial'), ('CORRETOR_REGUA', 'Régua de Penalizações'), ('CORRETOR_DESVIOS', 'Guia de Desvios'), ('CORRETOR_REPERTORIO', 'Guia de Repertórios Aceitos'), ('CORRETOR_COMUNICADO', 'Comunicados Rápidos')]
     titulo = models.CharField(max_length=200)
     descricao = models.TextField(blank=True, null=True) 
     conteudo = models.TextField(blank=True, null=True)  
@@ -228,11 +200,7 @@ class MaterialApoio(models.Model):
     def __str__(self): return self.titulo
     
 class Transacao(models.Model):
-    STATUS_CHOICES = (
-        ('PENDENTE', 'Pendente'),
-        ('APROVADO', 'Aprovado'),
-        ('RECUSADO', 'Recusado / Expirado'),
-    )
+    STATUS_CHOICES = (('PENDENTE', 'Pendente'), ('APROVADO', 'Aprovado'), ('RECUSADO', 'Recusado / Expirado'))
     aluno = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='transacoes')
     pagamento_id = models.CharField(max_length=100, unique=True, null=True, blank=True) 
     valor = models.DecimalField(max_digits=10, decimal_places=2)
@@ -243,5 +211,10 @@ class Transacao(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 
+class GabaritoPin(models.Model):
+    competencia = models.IntegerField(help_text="0 para OUTROS, 1 a 5 para as competências")
+    titulo = models.CharField(max_length=50)
+    texto = models.TextField()
+
     def __str__(self):
-        return f"Transação #{self.id} - {self.aluno.username} - R$ {self.valor} ({self.status})"
+        return f"C{self.competencia} - {self.titulo}"

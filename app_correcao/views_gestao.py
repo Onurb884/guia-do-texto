@@ -7,6 +7,8 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from .models import GabaritoPin
+from .serializers import GabaritoPinSerializer
 import json
 from google import genai
 
@@ -121,8 +123,6 @@ class GestaoRedacoesView(generics.ListAPIView):
     
     def list(self, request, *args, **kwargs):
         data = self.get_serializer(self.get_queryset(), many=True).data
-        
-        # INTELIGÊNCIA CORRIGIDA: Usa int() para garantir o cruzamento exato no dicionário
         corretores_ids = set()
         for d in data:
             if d.get('corretor_atual'): corretores_ids.add(int(d['corretor_atual']))
@@ -185,7 +185,7 @@ class ResolverAuditoriaView(APIView):
                 redacao.status = 'CORRIGIDA'
                 if correcao:
                     correcao.nota_final = 0
-                    correcao.comentario_geral = f"[FALHA GRAVE CONFIRMADA]\n{mensagem}\n\n{correcao.comentario_geral}"
+                    correcao.comentario_geral = f"[AVISO DA COORDENAÇÃO]\n{mensagem}"
                     correcao.save()
                     from .models import NotaCompetencia
                     NotaCompetencia.objects.filter(correcao=correcao).delete()
@@ -209,27 +209,25 @@ class ResolverAuditoriaView(APIView):
                 redacao.status = 'REFAZER'
                 redacao.corretor_atual = correcao.corretor if correcao else None
                 if correcao:
-                    correcao.comentario_geral = f"[ALERTA DA COORDENAÇÃO]\n{mensagem}\n\n{correcao.comentario_geral}"
+                    correcao.comentario_geral = f"[ALERTA_COORDENACAO]\n{mensagem}\n[/ALERTA_COORDENACAO]\n{correcao.comentario_geral}"
                     correcao.save()
 
             elif acao == 'ANULAR_E_DEVOLVER_CREDITO':
                 redacao.status = 'DEVOLVIDA'
                 if correcao:
-                    correcao.comentario_geral = f"[REDAÇÃO DEVOLVIDA]\n{mensagem}"
+                    correcao.comentario_geral = f"[REDAÇÃO CANCELADA]\n{mensagem}"
                     correcao.save()
                 
                 from .models import CarteiraAluno
                 carteira_aluno, _ = CarteiraAluno.objects.get_or_create(aluno=redacao.aluno)
-                if getattr(redacao, 'vip_pago', False):
-                    carteira_aluno.saldo_vip += 1
-                else:
-                    carteira_aluno.saldo_simples += 1
+                if getattr(redacao, 'vip_pago', False): carteira_aluno.saldo_vip += 1
+                else: carteira_aluno.saldo_simples += 1
                 carteira_aluno.save()
 
             elif acao == 'RECURSO_NEGADO':
                 redacao.status = 'CORRIGIDA'
                 if correcao:
-                    correcao.comentario_geral = f"[RESPOSTA AO RECURSO]\n{mensagem}\n\n{correcao.comentario_geral}"
+                    correcao.comentario_geral = f"[RESPOSTA AO RECURSO]\n{mensagem}"
                     correcao.save()
 
             elif acao == 'RECURSO_ACEITO':
@@ -237,14 +235,14 @@ class ResolverAuditoriaView(APIView):
                 redacao.is_urgente = True
                 redacao.corretor_atual = correcao.corretor if correcao else None
                 if correcao:
-                    correcao.comentario_geral = f"[RECURSO ACEITE - REFAZER CORREÇÃO]\n{mensagem}\n\n{correcao.comentario_geral}"
+                    correcao.comentario_geral = f"[ALERTA_COORDENACAO]\n{mensagem}\n[/ALERTA_COORDENACAO]\n{correcao.comentario_geral}"
                     correcao.save()
                     
             elif acao == 'EXIGIR_REFACAO':
                 redacao.status = 'REFAZER'
                 redacao.corretor_atual = correcao.corretor if correcao else None
                 if correcao:
-                    correcao.comentario_geral = f"[ALERTA DA COORDENAÇÃO (QA)]\n{mensagem}\n\n{correcao.comentario_geral}"
+                    correcao.comentario_geral = f"[ALERTA_COORDENACAO]\n{mensagem}\n[/ALERTA_COORDENACAO]\n{correcao.comentario_geral}"
                     correcao.save()
                     
             elif acao == 'FALSO_POSITIVO_QA':
@@ -260,8 +258,7 @@ class ResolverAuditoriaView(APIView):
                         nota_val = int(val)
                         nota_total += nota_val
                         nc = NotaCompetencia.objects.filter(correcao=correcao, numero_competencia=comp_num).first()
-                        if nc:
-                            nc.nota = nota_val; nc.save()
+                        if nc: nc.nota = nota_val; nc.save()
                     correcao.nota_final = nota_total
                     correcao.comentario_geral = f"[NOTA REVISADA PELA COORDENAÇÃO]\n{mensagem}\n\n{correcao.comentario_geral}"
                     correcao.save()
@@ -288,6 +285,7 @@ class GestaoFinanceiraView(APIView):
             from .models import Transacao
             inicio_mes = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             faturamento_total = 0; faturamento_mes = 0; aguardando_pagamento = 0
+            
             for t in Transacao.objects.all():
                 if getattr(t, 'tipo', '') in ['CREDITO', 'DEBITO']: continue
                 data_t = getattr(t, 'data_atualizacao', getattr(t, 'criado_em', getattr(t, 'data_criacao', getattr(t, 'data_envio', getattr(t, 'data', None)))))
@@ -296,24 +294,104 @@ class GestaoFinanceiraView(APIView):
                     faturamento_total += float(t.valor)
                     if is_este_mes: faturamento_mes += float(t.valor)
                 elif getattr(t, 'status', '').upper() == 'PENDENTE' and is_este_mes: aguardando_pagamento += float(t.valor)
+            
             for h in HistoricoCompra.objects.all():
                 data_h = getattr(h, 'data_compra', getattr(h, 'criado_em', getattr(h, 'data', None)))
                 faturamento_total += float(h.valor_pago)
                 if data_h and data_h >= inicio_mes: faturamento_mes += float(h.valor_pago)
             
-            lista_pagamentos = []; total_a_pagar = 0
-            for prof in User.objects.filter(is_corretor=True):
-                carteira = Carteira.objects.filter(corretor=prof).first()
-                if carteira and float(carteira.saldo_atual) > 0:
-                    total_a_pagar += float(carteira.saldo_atual)
-                    pendente = PagamentoCorretor.objects.filter(corretor=prof, status__in=['AGUARDANDO_RECIBO', 'EM_ANALISE', 'RECUSADO']).order_by('-data_solicitacao').first()
-                    lista_pagamentos.append({ 'corretor_id': prof.id, 'nome': f"{prof.first_name} {prof.last_name}".strip() or prof.username, 'email': prof.email, 'telefone': getattr(prof, 'telefone', ''), 'chave_pix': getattr(prof, 'chave_pix', ''), 'tipo_chave_pix': getattr(prof, 'tipo_chave_pix', ''), 'banco': getattr(prof, 'banco', ''), 'agencia_conta': getattr(prof, 'agencia_conta', ''), 'valor_a_receber': float(carteira.saldo_atual), 'saque_solicitado': carteira.saque_solicitado, 'qtd_normal': carteira.qtd_normal_pendente, 'qtd_vip': carteira.qtd_vip_pendente, 'pagamento_id': pendente.id if pendente else None, 'status_pagamento': pendente.status if pendente else None, 'arquivo_recibo_url': pendente.arquivo_recibo.url if pendente and pendente.arquivo_recibo else None, 'motivo_recusa': pendente.motivo_recusa if pendente else None })
+            lista_pagamentos = []
+            total_a_pagar = 0
+            
+            pendentes = PagamentoCorretor.objects.filter(
+                status__in=['AGUARDANDO_RECIBO', 'EM_ANALISE', 'RECUSADO', 'AGENDADO']
+            ).select_related('corretor').order_by('data_solicitacao')
+            
+            for pendente in pendentes:
+                prof = pendente.corretor
+                total_a_pagar += float(pendente.valor)
+                lista_pagamentos.append({ 
+                    'corretor_id': prof.id, 
+                    'nome': f"{prof.first_name} {prof.last_name}".strip() or prof.username, 
+                    'email': prof.email, 
+                    'telefone': getattr(prof, 'telefone', ''), 
+                    'chave_pix': getattr(prof, 'chave_pix', ''), 
+                    'tipo_chave_pix': getattr(prof, 'tipo_chave_pix', ''), 
+                    'banco': getattr(prof, 'banco', ''), 
+                    'agencia_conta': getattr(prof, 'agencia_conta', ''), 
+                    'valor_a_receber': float(pendente.valor), 
+                    'saque_solicitado': True, 
+                    'qtd_normal': pendente.qtd_normal, 
+                    'qtd_vip': pendente.qtd_vip, 
+                    'pagamento_id': pendente.id, 
+                    'status_pagamento': pendente.status, 
+                    'arquivo_recibo_url': pendente.arquivo_recibo.url if pendente.arquivo_recibo else None, 
+                    'motivo_recusa': pendente.motivo_recusa,
+                    'data_prevista_pagamento': getattr(pendente, 'data_prevista_pagamento', None) 
+                })
+            
+            # MATEMÁTICA CORRIGIDA: Soma o que JÁ FOI PAGO no mês para descontar do faturamento!
+            total_ja_pago_mes = 0
+            pagos_mes = PagamentoCorretor.objects.filter(status='PAGO', data_pagamento__gte=inicio_mes)
+            for p in pagos_mes:
+                total_ja_pago_mes += float(p.valor)
+                
+            lucro_bruto = faturamento_mes - (total_a_pagar + total_ja_pago_mes)
             
             lista_historico_pagamentos = []
             for p in PagamentoCorretor.objects.all().order_by('-data_pagamento', '-data_solicitacao'):
                 lista_historico_pagamentos.append({ 'id': p.id, 'corretor_nome': f"{p.corretor.first_name} {p.corretor.last_name}".strip() or p.corretor.username, 'email': p.corretor.email, 'data_solicitacao': p.data_solicitacao, 'data_pagamento': p.data_pagamento, 'valor': float(p.valor), 'qtd_normal': p.qtd_normal, 'qtd_vip': p.qtd_vip, 'status': p.status, 'arquivo_recibo_url': p.arquivo_recibo.url if p.arquivo_recibo else None })
-            return Response({ 'faturamento_total': faturamento_total, 'faturamento_mes': faturamento_mes, 'lucro_bruto_estimado': faturamento_mes - total_a_pagar, 'total_a_pagar_corretores': total_a_pagar, 'aguardando_pagamento': aguardando_pagamento, 'folha_pagamento': lista_pagamentos, 'historico_pagamentos': lista_historico_pagamentos }, status=200)
-        except Exception as e: return Response({'erro': str(e)}, status=500)
+            
+            return Response({ 
+                'faturamento_total': faturamento_total, 
+                'faturamento_mes': faturamento_mes, 
+                'lucro_bruto_estimado': lucro_bruto, 
+                'total_a_pagar_corretores': total_a_pagar, 
+                'aguardando_pagamento': aguardando_pagamento, 
+                'folha_pagamento': lista_pagamentos, 
+                'historico_pagamentos': lista_historico_pagamentos 
+            }, status=200)
+            
+        except Exception as e: 
+            return Response({'erro': str(e)}, status=500)
+
+class AgendarPagamentoView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    def post(self, request, pk):
+        pagamento = get_object_or_404(PagamentoCorretor, pk=pk)
+        data_prevista = request.data.get('data_prevista')
+        
+        if not data_prevista: 
+            return Response({"erro": "Você precisa selecionar uma data para o agendamento."}, status=400)
+            
+        if pagamento.status != 'EM_ANALISE': 
+            return Response({"erro": "Apenas recibos em análise podem ser agendados."}, status=400)
+        
+        pagamento.status = 'AGENDADO'
+        pagamento.data_prevista_pagamento = data_prevista
+        pagamento.save()
+        return Response({"mensagem": "Recibo aprovado e pagamento agendado!"}, status=200)
+
+class LiquidarLoteView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    def post(self, request):
+        hoje = timezone.now().date()
+        pagamentos_lote = PagamentoCorretor.objects.filter(status='AGENDADO', data_prevista_pagamento__lte=hoje)
+        qtd_liquidados = pagamentos_lote.count()
+        
+        if qtd_liquidados == 0:
+            return Response({"mensagem": "Nenhum pagamento agendado pendente para o dia de hoje."}, status=200)
+        
+        for p in pagamentos_lote:
+            p.status = 'PAGO'
+            p.data_pagamento = timezone.now()
+            p.save()
+            carteira = Carteira.objects.filter(corretor=p.corretor).first()
+            if carteira: 
+                carteira.saque_solicitado = False
+                carteira.save()
+                
+        return Response({"mensagem": f"{qtd_liquidados} pagamentos foram liquidados com sucesso!"}, status=200)
 
 class BaixarPagamentoView(APIView):
     permission_classes = [permissions.IsAdminUser]
@@ -323,12 +401,17 @@ class BaixarPagamentoView(APIView):
         pagamento.status = 'PAGO'; pagamento.data_pagamento = timezone.now(); pagamento.save()
         carteira = Carteira.objects.filter(corretor=pagamento.corretor).first()
         if carteira: carteira.saque_solicitado = False; carteira.save()
-        return Response({"mensagem": "Pago com sucesso!"}, status=200)
+        return Response({"mensagem": "Pago imediatamente com sucesso!"}, status=200)
 
 class RecusarReciboView(APIView):
     permission_classes = [permissions.IsAdminUser]
     def post(self, request, pk):
         pagamento = get_object_or_404(PagamentoCorretor, pk=pk)
         if pagamento.status in ['RECUSADO', 'PAGO']: return Response({"erro": "Este recibo já foi processado."}, status=400)
-        pagamento.status = 'RECUSADO'; pagamento.motivo_recusa = request.data.get('motivo_recusa', 'Motivo não especificado. Entre em contato com a equipe.'); pagamento.save()
-        return Response({"mensagem": "Recibo recusado com sucesso."}, status=200)
+        pagamento.status = 'RECUSADO'; pagamento.motivo_recusa = request.data.get('motivo_recusa', 'Assinatura inválida ou erro nos dados.'); pagamento.save()
+        return Response({"mensagem": "Recibo recusado com sucesso. O corretor foi notificado."}, status=200)
+
+class GabaritoPinViewSet(viewsets.ModelViewSet):
+    queryset = GabaritoPin.objects.all()
+    serializer_class = GabaritoPinSerializer
+    permission_classes = [IsAuthenticated]

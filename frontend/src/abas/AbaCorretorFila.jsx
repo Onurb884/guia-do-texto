@@ -13,19 +13,46 @@ import {
 import { 
   ViewIcon, ViewOffIcon, DeleteIcon, EditIcon, CopyIcon, AttachmentIcon, 
   DownloadIcon, CheckCircleIcon, WarningTwoIcon, ArrowBackIcon, StarIcon, 
-  WarningIcon, CloseIcon, InfoIcon, ArrowUpIcon, SearchIcon, TimeIcon 
+  WarningIcon, CloseIcon, InfoIcon, ArrowUpIcon, SearchIcon, TimeIcon, AddIcon
 } from '@chakra-ui/icons';
 
 const UserIcon = (props) => (<Icon viewBox="0 0 24 24" {...props}><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></Icon>);
-const CustomPinSVG = ({ cor, numero }) => (<Box position="relative" w="30px" h="30px" color={cor} filter="drop-shadow(0px 3px 3px rgba(0,0,0,0.2))" transition="transform 0.2s" _hover={{ transform: 'scale(1.15)' }}><Icon viewBox="0 0 24 24" w="100%" h="100%"><path fill="currentColor" d="M4 2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2z"/></Icon><Text position="absolute" top="4.5px" left="2px" w="100%" textAlign="center" color="white" fontSize="12px" fontWeight="900" fontFamily="system-ui">{numero}</Text></Box>);
+
+const CustomPinSVG = ({ cor, numero }) => (
+  <Box 
+    position="relative" w="22px" h="22px" color={cor} 
+    filter="drop-shadow(0px 2px 3px rgba(0,0,0,0.3))" 
+    transition="all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)" 
+    _hover={{ transform: 'scale(1.25)' }}
+  >
+    <Icon viewBox="0 0 24 24" w="100%" h="100%"><path fill="currentColor" d="M4 2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2z"/></Icon>
+    <Text position="absolute" top="5px" left="0" w="100%" textAlign="center" color="white" fontSize="10px" fontWeight="900" fontFamily="system-ui">{numero === 0 ? '★' : numero}</Text>
+  </Box>
+);
 
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const formatarTexto = (texto) => { if (!texto) return ''; if (texto.includes('<p>') || texto.includes('<span')) return texto; return texto.replace(/\n/g, '<br />').replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/_(.*?)_/g, '<em>$1</em>').replace(/~(.*?)~/g, '<u>$1</u>'); };
 
-const ERROS_GRAMATICA = [{ label: 'Ortografia', value: 'ORTOGRAFIA' }, { label: 'Acentuação', value: 'ACENTUACAO' }, { label: 'Pontuação', value: 'PONTUACAO' }, { label: 'Concordância', value: 'CONCORDANCIA' }, { label: 'Regência', value: 'REGENCIA' }, { label: 'Crase', value: 'CRASE' }, { label: 'Colocação Pronominal', value: 'COLOCACAO_PRONOMINAL' }, { label: 'Translineação', value: 'TRANSLINEACAO' }, { label: 'Impropriedade Vocabular', value: 'IMPROPRIEDADE_VOCABULAR' }, { label: 'Outros', value: 'OUTROS' }];
-const COMPETENCIAS_ENEM = [{ id: 1, nome: '1. Gramática', cor: 'red.500', erros: ERROS_GRAMATICA }, { id: 2, nome: '2. Tema/Estrutura/Repertório', cor: 'blue.500' }, { id: 3, nome: '3. Argumentação', cor: 'yellow.400' }, { id: 4, nome: '4. Coesão', cor: 'green.500' }, { id: 5, nome: '5. Proposta', cor: 'purple.500' }];
-const COMPETENCIAS_SIMPLES = [{ id: 1, nome: '1. Gramática', cor: 'red.500', erros: ERROS_GRAMATICA }, { id: 2, nome: '2. Estrutura/Tema/Repertório', cor: 'blue.500' }, { id: 3, nome: '3. Argumentação', cor: 'yellow.400' }, { id: 4, nome: '4. Coesão e coerência', cor: 'green.500' }];
-const NOTAS_ENEM = [0, 40, 80, 120, 160, 200]; const NOTAS_SIMPLES = [0, 5, 10, 15, 20, 25];
+// RESTAURAMOS OS NOMES COMPLETOS PARA A SIDEBAR (E O PIN 0 É O "OUTROS")
+const COMPETENCIAS_ENEM = [
+    { id: 1, nome: '1. Gramática', cor: 'red.500', bg: 'red.50' }, 
+    { id: 2, nome: '2. Tema/Estrutura/Repertório', cor: 'blue.500', bg: 'blue.50' }, 
+    { id: 3, nome: '3. Argumentação', cor: 'yellow.500', bg: 'yellow.50' }, 
+    { id: 4, nome: '4. Coesão', cor: 'green.500', bg: 'green.50' }, 
+    { id: 5, nome: '5. Proposta de Intervenção', cor: 'purple.500', bg: 'purple.50' },
+    { id: 0, nome: 'Outros (Observações Gerais)', cor: 'black', bg: 'gray.200' }
+];
+const COMPETENCIAS_PADRAO = [
+    { id: 1, nome: '1. Domínio da Norma Culta', cor: 'red.500', bg: 'red.50' }, 
+    { id: 2, nome: '2. Adequação ao Tema e Estrutura Textual', cor: 'blue.500', bg: 'blue.50' }, 
+    { id: 3, nome: '3. Coerência e Argumentação', cor: 'yellow.500', bg: 'yellow.50' }, 
+    { id: 4, nome: '4. Coesão Textual', cor: 'green.500', bg: 'green.50' },
+    { id: 0, nome: 'Outros (Observações Gerais)', cor: 'black', bg: 'gray.200' }
+];
+
+const NOTAS_ENEM = [0, 40, 80, 120, 160, 200]; 
+const NOTAS_PADRAO_100 = [0, 5, 10, 15, 20, 25];
+const NOTAS_PADRAO_10 = [0, 0.5, 1.0, 1.5, 2.0, 2.5];
 
 const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carregarCarteira, configPlataforma, todasRespostas }) => {
     const toast = useToast();
@@ -51,11 +78,15 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
     const [tempoRestanteStr, setTempoRestanteStr] = useState('');
     const [loadingIA, setLoadingIA] = useState(false);
     
-    const [mostrarPins, setMostrarPins] = useState(true); // ESTADO DO INTERRUPTOR DE PINS
+    const [mostrarPins, setMostrarPins] = useState(true);
+    const [filtroCompetenciaView, setFiltroCompetenciaView] = useState(null);
 
     const [pinCompetencia, setPinCompetencia] = useState(1);
-    const [pinTipoErro, setPinTipoErro] = useState('');
     const [pinTexto, setPinTexto] = useState('');
+    
+    // GABARITO DE PINS & BUSCA
+    const [gabaritoPins, setGabaritoPins] = useState([]);
+    const [buscaGabaritoPin, setBuscaGabaritoPin] = useState('');
 
     const [quickReplyContext, setQuickReplyContext] = useState('GERAL');
     const [quickReplyComp, setQuickReplyComp] = useState(1);
@@ -75,9 +106,13 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
 
     const imageContainerRef = useRef(null);
 
-    const isSimplesMode = redacaoAtual?.tema_tipo?.toUpperCase() === 'SIMPLES' || redacaoAtual?.tipo?.toUpperCase() === 'SIMPLES';
-    const compsAtuais = isSimplesMode ? COMPETENCIAS_SIMPLES : COMPETENCIAS_ENEM;
-    const notasPossiveisAtuais = isSimplesMode ? NOTAS_SIMPLES : NOTAS_ENEM;
+    const tipoAtual = redacaoAtual?.tema_tipo?.toUpperCase() || redacaoAtual?.tipo?.toUpperCase() || 'ENEM';
+    const isPadrao = tipoAtual === 'PADRAO_10' || tipoAtual === 'PADRAO_100' || tipoAtual === 'SIMPLES';
+    const isPadrao10 = tipoAtual === 'PADRAO_10';
+    
+    const compsAtuais = isPadrao ? COMPETENCIAS_PADRAO : COMPETENCIAS_ENEM;
+    const notasPossiveisAtuais = isPadrao10 ? NOTAS_PADRAO_10 : (isPadrao ? NOTAS_PADRAO_100 : NOTAS_ENEM);
+    const numComps = isPadrao ? [1,2,3,4] : [1,2,3,4,5];
 
     const motivadoresAtuais = redacaoAtual?.tema_completo?.motivadores || redacaoAtual?.motivadores || redacaoAtual?.tema_motivadores || [];
     const descricaoProposta = redacaoAtual?.tema_completo?.descricao || redacaoAtual?.tema_descricao || '';
@@ -88,8 +123,19 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
         return caminho.startsWith('http') ? caminho : `http://127.0.0.1:8000${caminho}`;
     };
 
+    const carregarGabaritoPins = async () => {
+        try {
+            const res = await axios.get('http://127.0.0.1:8000/api/gestao/gabarito-pins/', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+            setGabaritoPins(res.data);
+        } catch (e) {
+            console.log("Nenhum gabarito de pins cadastrado ou rota indisponível.");
+        }
+    };
+
     useEffect(() => {
         if (!redacaoAtual) return;
+        carregarGabaritoPins();
+
         const endTime = localStorage.getItem('correcao_endtime');
         if (!endTime) return;
         const updateTimer = () => {
@@ -115,12 +161,7 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
         const redacaoPresa = fila.find(r => (r.status === 'EM_CORRECAO' || r.status === 'REFAZER') && r.corretor_atual === usuario.id);
 
         if (redacaoPresa && redacaoPresa.id.toString() !== idClicado) {
-            abrirConfirmacao(
-                "Atenção: Redação Aberta!", 
-                `O servidor indica que você já iniciou a correção da redação #${redacaoPresa.id}. Conclua ou devolva a redação #${redacaoPresa.id} antes de puxar uma nova da fila.`, 
-                () => { localStorage.setItem('redacao_em_andamento', redacaoPresa.id); carregarDadosRedacao(redacaoPresa.id, token); }, 
-                "orange", "Retornar à Redação"
-            );
+            abrirConfirmacao("Atenção: Redação Aberta!", `O servidor indica que você já iniciou a correção da redação #${redacaoPresa.id}. Conclua ou devolva a redação #${redacaoPresa.id} antes de puxar uma nova da fila.`, () => { localStorage.setItem('redacao_em_andamento', redacaoPresa.id); carregarDadosRedacao(redacaoPresa.id, token); }, "orange", "Retornar à Redação");
             return; 
         }
 
@@ -147,28 +188,36 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                     const temaRes = await axios.get(`http://127.0.0.1:8000/api/temas/${temaId}/`, { headers: { Authorization: `Bearer ${token}` } });
                     redData.tema_completo = temaRes.data;
                 }
-            } catch (e) { console.log('Aviso: Não foi possível carregar os textos motivadores diretamente do tema.'); }
+            } catch (e) { console.log('Aviso: Não foi possível carregar os textos motivadores.'); }
 
             setRedacaoAtual(redData); 
             if (redData.texto && redData.texto.trim() !== '') { setConteudoTexto(redData.texto); } else if (redData.arquivo && redData.arquivo.endsWith('.txt')) { const textResponse = await axios.get(redData.arquivo); setConteudoTexto(textResponse.data); } else { setConteudoTexto(null); } 
             
-            const isSimples = redData.tema_tipo?.toUpperCase() === 'SIMPLES' || redData.tipo?.toUpperCase() === 'SIMPLES'; 
-            let newNotas = isSimples ? { 1: 0, 2: 0, 3: 0, 4: 0 } : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-            let newComents = isSimples ? { 1: '', 2: '', 3: '', 4: '' } : { 1: '', 2: '', 3: '', 4: '', 5: '' };
+            const tipoLoaded = redData.tema_tipo?.toUpperCase() || redData.tipo?.toUpperCase() || 'ENEM'; 
+            const isPadraoLoaded = tipoLoaded === 'PADRAO_10' || tipoLoaded === 'PADRAO_100' || tipoLoaded === 'SIMPLES';
+
+            let newNotas = isPadraoLoaded ? { 1: 0, 2: 0, 3: 0, 4: 0 } : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            let newComents = isPadraoLoaded ? { 1: '', 2: '', 3: '', 4: '' } : { 1: '', 2: '', 3: '', 4: '', 5: '' };
             let newPins = []; let alertaCoord = "";
 
             if (redData.correcao && redData.correcao.competencias) {
-                redData.correcao.competencias.forEach(c => { newNotas[c.comp] = c.nota; newComents[c.comp] = c.comentario || ''; });
+                redData.correcao.competencias.forEach(c => { newNotas[c.comp] = parseFloat(c.nota); newComents[c.comp] = c.comentario || ''; });
                 newPins = (redData.correcao.anotacoes || []).map(a => ({ id: a.id || Date.now() + Math.random(), x: a.x, y: a.y, width: a.width, height: a.height, competencia: a.competencia, tipo_erro: a.tipo_erro, texto: a.texto }));
                 const match = redData.correcao.comentario_geral?.match(/\[ALERTA_COORDENACAO\]([\s\S]*?)\[\/ALERTA_COORDENACAO\]/);
                 if (match) alertaCoord = match[1].trim();
             }
+            
+            setFiltroCompetenciaView(null); 
             setNotas(newNotas); setComentarios(newComents); setPins(newPins); setMensagemRefacao(alertaCoord); localStorage.setItem('redacao_em_andamento', id); 
         } catch (e) { toast({ title: 'Erro ao baixar redação', status: 'error' }); } 
     };
 
+    const calcularNotaFinal = () => {
+        return Object.values(notas).reduce((a, b) => parseFloat(a || 0) + parseFloat(b || 0), 0);
+    };
+
     const finalizarCorrecaoReal = async () => { 
-        const payload = { redacao_id: redacaoAtual.id, nota_final: Object.values(notas).reduce((a,b)=>a+b,0), notas: notas, comentarios: comentarios, anotacoes: pins.map(p => ({ competencia: p.competencia, x: p.x, y: p.y, width: p.width, height: p.height, tipo_erro: p.tipo_erro || 'Geral', texto: p.texto || "" })) }; 
+        const payload = { redacao_id: redacaoAtual.id, nota_final: calcularNotaFinal(), notas: notas, comentarios: comentarios, anotacoes: pins.map(p => ({ competencia: p.competencia, x: p.x, y: p.y, width: p.width, height: p.height, tipo_erro: 'Geral', texto: p.texto || "" })) }; 
         try { 
             await axios.post('http://127.0.0.1:8000/api/corrigir/', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
             toast({ title: 'Sucesso! 🚀', description: 'Correção finalizada.', status: 'success' }); 
@@ -177,16 +226,16 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
     };
 
     const handleFinalizarClick = () => {
-        const competenciasFaltandoPins = compsAtuais.filter(comp => !pins.some(p => p.competencia === comp.id));
+        const competenciasFaltandoPins = numComps.filter(compID => !pins.some(p => p.competencia === compID));
         if (competenciasFaltandoPins.length > 0) {
-            const nomesFaltando = competenciasFaltandoPins.map(c => c.nome.split('.')[0]).join(', '); 
+            const nomesFaltando = competenciasFaltandoPins.map(c => `C${c}`).join(', '); 
             return toast({ title: 'Marcações Incompletas', description: `Faça pelo menos uma marcação (pin) nas competências: ${nomesFaltando}.`, status: 'warning', duration: 6000, isClosable: true });
         }
-        for (let i = 0; i < compsAtuais.length; i++) {
-            const comp = compsAtuais[i];
-            const coment = comentarios[comp.id] || '';
+        for (let i = 0; i < numComps.length; i++) {
+            const compID = numComps[i];
+            const coment = comentarios[compID] || '';
             if (coment.trim().length < 5) {
-                return toast({ title: `Comentário Ausente`, description: `Justifique a nota da ${comp.nome}.`, status: 'warning', duration: 6000, isClosable: true });
+                return toast({ title: `Comentário Ausente`, description: `Justifique a nota da COMP ${compID}.`, status: 'warning', duration: 6000, isClosable: true });
             }
         }
         abrirConfirmacao("Finalizar Correção", `As justificativas e marcações foram validadas. Confirma o envio final?`, finalizarCorrecaoReal, "green", "Enviar");
@@ -197,8 +246,9 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
             await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/liberar/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
             toast({ title: 'Redação devolvida.', status: 'info' }); 
             localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); 
-        } catch (error) {} 
+        } catch (error) { toast({ title: 'Erro ao liberar redação', description: error.response?.data?.erro || "Verifique sua conexão.", status: 'error' }); } 
     };
+
     const sairDaCorrecao = () => { localStorage.removeItem('redacao_em_andamento'); localStorage.removeItem('correcao_endtime'); setRedacaoAtual(null); carregarFila(); };
 
     const gerarCorrecaoIA = async (tentativa = 1) => { 
@@ -207,7 +257,7 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
           const res = await axios.post(`http://127.0.0.1:8000/api/corrigir/${redacaoAtual.id}/ia/`, { texto: conteudoTexto || '', tema: redacaoAtual.tema_titulo, tipo: redacaoAtual.tema_tipo || redacaoAtual.tipo || 'ENEM' }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }); 
           const dados = res.data;
           let novasNotas = { ...notas }; let novosComentarios = { ...comentarios };
-          if (dados.competencias && Array.isArray(dados.competencias)) { dados.competencias.forEach(c => { novasNotas[c.comp] = c.nota; novosComentarios[c.comp] = c.comentario || ''; }); } else if (dados.notas && dados.comentarios) { novasNotas = dados.notas; novosComentarios = dados.comentarios; }
+          if (dados.competencias && Array.isArray(dados.competencias)) { dados.competencias.forEach(c => { novasNotas[c.comp] = parseFloat(c.nota); novosComentarios[c.comp] = c.comentario || ''; }); } else if (dados.notas && dados.comentarios) { novasNotas = dados.notas; novosComentarios = dados.comentarios; }
           setNotas(novasNotas); setComentarios(novosComentarios); toast({ title: 'Mágica feita! ✨', status: 'success' }); setLoadingIA(false);
         } catch(e) { 
           if (e.response && e.response.status === 503 && tentativa <= 3) { toast({ title: `IA Ocupada (Tentativa ${tentativa}/3)`, description: "Tentando novamente...", status: 'info', duration: 2500 }); setTimeout(() => gerarCorrecaoIA(tentativa + 1), 3000);
@@ -231,25 +281,58 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
     const getCoords = (e) => { if (!imageContainerRef.current) return { x: 0, y: 0 }; const r = imageContainerRef.current.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 }; };
     const handleMouseDown = (e) => { if (e.target.closest('.chakra-popover__popper') || e.target.closest('.pin-trigger')) return; e.preventDefault(); const c = getCoords(e); setStartPoint(c); setIsDrawing(true); setCurrentBox({ x: c.x, y: c.y, width: 0, height: 0 }); };
     const handleMouseMove = (e) => { if (!isDrawing || !startPoint) return; const c = getCoords(e); setCurrentBox({ x: Math.min(startPoint.x, c.x), y: Math.min(startPoint.y, c.y), width: Math.abs(c.x - startPoint.x), height: Math.abs(c.y - startPoint.y) }); };
-    const handleMouseUp = () => { if (!isDrawing) return; setIsDrawing(false); if (currentBox.width < 1 || currentBox.height < 1) { setCurrentBox({ ...currentBox, width: 4, height: 2 }); } setEditingPinId(null); setPinCompetencia(1); setPinTipoErro(''); setPinTexto(''); onOpen(); };
-    const handleEditPin = (pin) => { setEditingPinId(pin.id); setPinCompetencia(pin.competencia); setPinTipoErro(pin.tipo_erro || ''); setPinTexto(pin.texto || ''); setCurrentBox(null); onOpen(); };
-    const salvarPin = () => { if (pinCompetencia === 1 && !pinTipoErro) return toast({ title: 'Selecione o erro', status: 'warning' }); const novoPin = editingPinId ? { ...pins.find(p => p.id === editingPinId), competencia: parseInt(pinCompetencia), tipo_erro: pinTipoErro, texto: pinTexto } : { id: Date.now(), ...currentBox, competencia: parseInt(pinCompetencia), tipo_erro: pinTipoErro, texto: pinTexto }; setPins(editingPinId ? pins.map(p => p.id === editingPinId ? novoPin : p) : [...pins, novoPin]); setEditingPinId(null); setCurrentBox(null); onClose(); };
+    const handleMouseUp = () => { if (!isDrawing) return; setIsDrawing(false); if (currentBox.width < 1 || currentBox.height < 1) { setCurrentBox({ ...currentBox, width: 4, height: 2 }); } setEditingPinId(null); setPinCompetencia(1); setPinTexto(''); setBuscaGabaritoPin(''); onOpen(); };
+    
+    const handleEditPin = (pin) => { 
+        setEditingPinId(pin.id); 
+        setPinCompetencia(pin.competencia); 
+        setPinTexto(pin.texto || ''); 
+        setCurrentBox(null); 
+        setBuscaGabaritoPin('');
+        onOpen(); 
+    };
+    
+    const salvarPin = () => { 
+        if (!pinTexto.trim()) return toast({ title: 'Observação Vazia', description: 'Escreva algo no balão do apontamento.', status: 'warning' }); 
+        const novoPin = editingPinId ? { ...pins.find(p => p.id === editingPinId), competencia: parseInt(pinCompetencia), texto: pinTexto } : { id: Date.now(), ...currentBox, competencia: parseInt(pinCompetencia), texto: pinTexto }; 
+        setPins(editingPinId ? pins.map(p => p.id === editingPinId ? novoPin : p) : [...pins, novoPin]); 
+        setEditingPinId(null); setCurrentBox(null); onClose(); 
+        if (filtroCompetenciaView !== null && filtroCompetenciaView !== parseInt(pinCompetencia) && pinCompetencia !== 0) { setFiltroCompetenciaView(parseInt(pinCompetencia)); }
+    };
+    
     const removerPin = (id) => { setPins(pins.filter(p => p.id !== id)); setHoveredPinId(null); };
 
     const getPinTitle = (pin) => {
-        if (pin.competencia === 1 && pin.tipo_erro && pin.tipo_erro !== 'Geral') { return `Competência 1 - ${pin.tipo_erro}`; }
-        return `Competência ${pin.competencia}`;
+        if (pin.competencia === 0) return "OUTROS (Geral)";
+        return `COMPETÊNCIA ${pin.competencia}`;
     };
 
     if (redacaoAtual) {
         const isAcabando = tempoRestanteStr && parseInt(tempoRestanteStr.split(':')[0]) < 5;
+        const contagem = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 0: 0, total: pins.length };
+        pins.forEach(pin => { if (pin.competencia !== undefined) contagem[pin.competencia]++; });
+        
+        const notaTotalFinal = calcularNotaFinal();
+        const metaVerde = isPadrao10 ? 9 : (isPadrao ? 90 : 900);
+
         return (
-          <Flex h="100vh" overflow="hidden" w="full" bg="white">
-              <Box flex="1" bg="gray.100" overflow="auto" p={4} display="flex" flexDirection="column" alignItems="center" minH="100%">
-                  <Flex justify="space-between" align="center" mb={4} w="full" maxW="1000px">{redacaoAtual.status === 'REFAZER' ? (<Button leftIcon={<ArrowBackIcon />} onClick={sairDaCorrecao} colorScheme="teal" variant="ghost" size="sm">Voltar para a Fila</Button>) : ( <Box /> )}</Flex>
-                  {mensagemRefacao && (<Alert status="error" variant="left-accent" mb={4} borderRadius="md" w="full" maxW="1000px" shadow="sm" flexShrink={0} alignItems="flex-start"><AlertIcon mt={1} /><Box w="full"><Text fontWeight="bold" color="red.800">Atenção: Ajuste solicitado!</Text><Text fontSize="sm" color="red.700" mt={1} whiteSpace="pre-wrap">"{mensagemRefacao}"</Text></Box></Alert>)}
+          <Flex h="100vh" overflow="hidden" w="full" bg="gray.100">
+              <Box flex="1" bg="gray.100" overflow="auto" p={4} display="flex" flexDirection="column" alignItems="center" minH="100%" pb={8}>
                   
-                  <Box w="full" maxW="1000px" bg="white" p={5} mb={4} borderRadius="xl" boxShadow="sm" borderLeft="4px solid" borderColor={isSimplesMode ? "blue.500" : "green.500"} flexShrink={0}>
+                  <Flex direction="column" align="center" w="full" px={4} mb={2}>
+                      {redacaoAtual.status === 'REFAZER' && (
+                          <Flex w="full" mb={4}>
+                              <Button leftIcon={<ArrowBackIcon />} onClick={sairDaCorrecao} colorScheme="teal" variant="ghost" size="sm">Voltar para a Fila</Button>
+                          </Flex>
+                      )}
+                      {mensagemRefacao && (
+                          <Alert w="full" status="error" variant="left-accent" mb={4} borderRadius="md" shadow="sm">
+                              <AlertIcon /><Box w="full"><Text fontWeight="bold" color="red.800">Atenção: A coordenação solicitou ajustes!</Text><Text fontSize="sm" color="red.700" mt={1} whiteSpace="pre-wrap">"{mensagemRefacao}"</Text></Box>
+                          </Alert>
+                      )}
+                  </Flex>
+                  
+                  <Box w="full" bg="white" p={5} mb={3} borderRadius="xl" boxShadow="sm" borderLeft="4px solid" borderColor={isPadrao10 ? "purple.500" : (isPadrao ? "blue.500" : "green.500")} flexShrink={0}>
                       <Flex justify="space-between" align="flex-end" wrap="wrap" gap={4}>
                           <VStack align="start" spacing={3} w="full">
                               <HStack spacing={2} align="center"><UserIcon color="teal.500" boxSize={5} /><Text fontSize="lg" fontWeight="900" color="gray.700" textTransform="uppercase">{redacaoAtual.aluno_nome}</Text></HStack>
@@ -257,14 +340,10 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                               
                               <Flex justify="space-between" align="center" w="full" wrap="nowrap" gap={3}>
                                   <HStack spacing={4}>
-                                      {tempoRestanteStr && (<Badge colorScheme={isAcabando ? "red" : "orange"} px={3} py={1.5} borderRadius="md" fontSize="md" display="flex" alignItems="center" gap={2} animation={isAcabando ? "pulse 1.5s infinite" : "none"}><TimeIcon /> {tempoRestanteStr}</Badge>)}
-                                      <Badge bg={isSimplesMode ? 'blue.50' : 'green.50'} color={isSimplesMode ? 'blue.700' : 'green.700'} px={4} py={1.5} borderRadius="md" fontSize="md" fontWeight="bold" letterSpacing="wider">{redacaoAtual.tema_tipo || redacaoAtual.tipo || 'ENEM'}</Badge>
+                                      {tempoRestanteStr && (<Badge colorScheme={isAcabando ? "red" : "orange"} px={4} py={1.5} borderRadius="md" fontSize="md" display="flex" alignItems="center" gap={2} animation={isAcabando ? "pulse 1.5s infinite" : "none"} shadow="sm"><TimeIcon /> {tempoRestanteStr}</Badge>)}
+                                      <Badge bg={isPadrao10 ? 'purple.50' : (isPadrao ? 'blue.50' : 'green.50')} color={isPadrao10 ? 'purple.700' : (isPadrao ? 'blue.700' : 'green.700')} px={4} py={1.5} borderRadius="md" fontSize="md" fontWeight="bold" letterSpacing="wider">{tipoAtual.replace('_', ' ')}</Badge>
                                   </HStack>
-                                  <HStack spacing={3}>
-                                      {/* BOTÃO OCULTAR PINS - AGORA AQUI */}
-                                      <Button size="sm" onClick={() => setMostrarPins(!mostrarPins)} leftIcon={<Icon as={mostrarPins ? ViewOffIcon : ViewIcon} />} colorScheme="gray" variant="outline" bg="white" shadow="sm">
-                                          {mostrarPins ? "Ocultar Marcações" : "Mostrar Marcações"}
-                                      </Button>
+                                  <HStack spacing={4}>
                                       <Button size="sm" colorScheme="blue" variant="outline" leftIcon={<InfoIcon />} onClick={modalProposta.onOpen} shadow="sm">Ver Proposta</Button>
                                   </HStack>
                               </Flex>
@@ -272,8 +351,32 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                       </Flex>
                   </Box>
 
-                  <Box position="relative" display="inline-block" height="fit-content" ref={imageContainerRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} cursor="crosshair" boxShadow="2xl" userSelect="none" border="1px solid #ddd" bg="white" w={conteudoTexto ? "700px" : "full"} maxW={conteudoTexto ? "700px" : "900px"} flexShrink={conteudoTexto ? 0 : 1}>
-                      {conteudoTexto ? ( 
+                  <Flex position="sticky" top={{ base: "0", md: "16px" }} zIndex={10} justify="space-between" align="center" w="full" bg="rgba(255, 255, 255, 0.85)" backdropFilter="blur(16px)" p={3} px={5} mb={4} borderRadius="xl" boxShadow="md" border="1px solid" borderColor="gray.200" flexShrink={0}>
+                      <HStack spacing={3} overflowX="auto" pb={{base: 2, md: 0}} css={{ '&::-webkit-scrollbar': { display: 'none' } }}>
+                          <Text fontSize="xs" fontWeight="bold" color="gray.600" textTransform="uppercase" whiteSpace="nowrap">Filtrar Marcações:</Text>
+                          <HStack spacing={2}>
+                              <Button size="xs" variant={filtroCompetenciaView === null ? 'solid' : 'outline'} colorScheme="gray" onClick={() => setFiltroCompetenciaView(null)}>Todas ({contagem.total})</Button>
+                              {[...numComps, 0].map(c => {
+                                  const info = compsAtuais.find(x => x.id === c);
+                                  const scheme = info.cor === 'black' ? 'gray' : info.cor.split('.')[0];
+                                  return (
+                                      <Button key={c} size="xs" variant={filtroCompetenciaView === c ? 'solid' : 'outline'} colorScheme={scheme} onClick={() => setFiltroCompetenciaView(c === filtroCompetenciaView ? null : c)}>
+                                          {c === 0 ? `OUTROS (${contagem[c]})` : `C${c} (${contagem[c]})`}
+                                      </Button>
+                                  );
+                              })}
+                          </HStack>
+                      </HStack>
+                      <HStack spacing={3} ml={4} flexShrink={0}>
+                          <Button size="xs" onClick={() => setMostrarPins(!mostrarPins)} leftIcon={<Icon as={mostrarPins ? ViewOffIcon : ViewIcon} />} colorScheme="gray" variant="outline" bg="white" shadow="sm">{mostrarPins ? "Ocultar Tudo" : "Mostrar Tudo"}</Button>
+                      </HStack>
+                  </Flex>
+
+                  <Box position="relative" display="inline-block" height="fit-content" ref={imageContainerRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} cursor="crosshair" boxShadow="2xl" userSelect="none" border="1px solid #ddd" bg="white" w="full" maxW="1200px" flexShrink={0} mx="auto">
+                      
+                      {redacaoAtual.arquivo ? (
+                          <Image src={getImagemUrl(redacaoAtual.arquivo)} alt="Redação" display="block" w="100%" h="auto" objectFit="contain" />
+                      ) : conteudoTexto ? ( 
                           <Box p="0" position="relative" minHeight="1216px" bgImage="linear-gradient(transparent 39px, #ccc 40px)" bgSize="100% 40px">
                               <Box position="absolute" left={0} top={0} bottom={0} w="40px" borderRight="1px solid #ccc" bg="gray.50" pt="8px" pointerEvents="none" zIndex={2}>
                                   {Array.from({length: 30}).map((_, i) => (
@@ -284,20 +387,26 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                                   {conteudoTexto}
                               </Box>
                           </Box>
-                      ) : ( <Image src={getImagemUrl(redacaoAtual.arquivo)} alt="Redação" display="block" w="100%" h="auto" /> )}
+                      ) : null}
                       
                       {currentBox && (<Box position="absolute" left={`${currentBox.x}%`} top={`${currentBox.y}%`} w={`${currentBox.width}%`} h={`${currentBox.height}%`} border="2px dashed teal" bg="rgba(0, 128, 128, 0.2)" zIndex={5} />)}
                       
-                      {mostrarPins && pins.map((pin) => { 
+                      {mostrarPins && pins.filter(p => filtroCompetenciaView === null || p.competencia === filtroCompetenciaView).map((pin) => { 
                           const config = compsAtuais.find(c => c.id === pin.competencia); 
                           const isHovered = hoveredPinId === pin.id; 
                           return (
                           <Box key={pin.id}>
-                              <Box position="absolute" left={`${pin.x}%`} top={`${pin.y}%`} w={`${pin.width}%`} h={`${pin.height}%`} bg={config.cor} opacity={isHovered ? 0.4 : 0} transition="opacity 0.2s" pointerEvents="none" zIndex={4} />
+                              <Box position="absolute" left={`${pin.x}%`} top={`${pin.y}%`} w={`${pin.width}%`} h={`${pin.height}%`} bg={config.cor} opacity={isHovered ? 0.4 : 0} transition="opacity 0.2s" pointerEvents="none" zIndex={2} />
                               <Popover placement="top" isLazy>
-                                  <PopoverTrigger><Box className="pin-trigger" position="absolute" left={`calc(${pin.x}% + ${pin.width}% - 6px)`} top={`calc(${pin.y}% - 28px)`} cursor="pointer" zIndex={10} display="flex" alignItems="center" justifyContent="center" onMouseEnter={() => setHoveredPinId(pin.id)} onMouseLeave={() => setHoveredPinId(null)}><CustomPinSVG cor={config.cor} numero={pin.competencia} /></Box></PopoverTrigger>
+                                  <PopoverTrigger>
+                                      {/* TRIGGER: Z-Index baixo para não esmagar a barra sticky ao fazer scroll */}
+                                      <Box className="pin-trigger" position="absolute" left={`calc(${pin.x}% + ${pin.width}% - 6px)`} top={`calc(${pin.y}% - 22px)`} cursor="pointer" zIndex={isHovered ? 5 : 2} display="flex" alignItems="center" justifyContent="center" onMouseEnter={() => setHoveredPinId(pin.id)} onMouseLeave={() => setHoveredPinId(null)}>
+                                          <CustomPinSVG cor={config.cor} numero={pin.competencia} />
+                                      </Box>
+                                  </PopoverTrigger>
                                   <Portal>
-                                      <PopoverContent zIndex={9999} width="280px" boxShadow="xl" onMouseEnter={() => setHoveredPinId(pin.id)} onMouseLeave={() => setHoveredPinId(null)}>
+                                      {/* POPOVER: Forçando zIndex altíssimo */}
+                                      <PopoverContent rootProps={{ style: { zIndex: 99999 } }} zIndex={99999} width="280px" boxShadow="xl" borderRadius="2xl" overflow="hidden" border="1px solid" borderColor="gray.100" onMouseEnter={() => setHoveredPinId(pin.id)} onMouseLeave={() => setHoveredPinId(null)}>
                                           <PopoverArrow /> <PopoverCloseButton /> 
                                           <PopoverHeader fontWeight="bold" fontSize="sm">{getPinTitle(pin)}</PopoverHeader>
                                           <PopoverBody><Text fontSize="sm" mb={3} noOfLines={3}>{pin.texto || "Sem observações."}</Text><HStack spacing={2}><Button size="xs" colorScheme="blue" variant="outline" leftIcon={<EditIcon />} width="50%" onClick={() => handleEditPin(pin)}>Editar</Button><Button size="xs" colorScheme="red" variant="outline" leftIcon={<DeleteIcon />} width="50%" onClick={() => removerPin(pin.id)}>Excluir</Button></HStack></PopoverBody>
@@ -307,14 +416,14 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                           </Box>); 
                       })}
                   </Box>
-                  <Box h="100px" />
+                  <Box h="100px" flexShrink={0} />
               </Box>
 
-              <Box w={sidebarOpen ? "360px" : "0px"} transition="width 0.3s" bg="gray.50" borderLeft="1px solid #ccc" display="flex" flexDirection="column" position="relative">
+              <Box w={sidebarOpen ? "360px" : "0px"} transition="width 0.3s" bg="gray.50" borderLeft="1px solid #ccc" display="flex" flexDirection="column" position="relative" zIndex={40}>
                   <Box as="button" onClick={() => setSidebarOpen(!sidebarOpen)} position="absolute" left="-40px" top="20px" bg="teal.600" w="40px" h="50px" borderLeftRadius="xl" boxShadow="-4px 0 10px rgba(0,0,0,0.1)" display="flex" alignItems="center" justifyContent="center" zIndex="20" _hover={{ bg: 'teal.700', transform: 'scale(1.05)' }} transition="all 0.2s"><Icon as={sidebarOpen ? ViewOffIcon : ViewIcon} color="white" w={5} h={5} /></Box>
                   <Box display={sidebarOpen ? "flex" : "none"} flexDirection="column" h="100%">
                       <Box p={4} mx={3} mt={4} bg="white" borderRadius="lg" boxShadow="sm" border="1px solid" borderColor="gray.100">
-                          <Flex justify="space-between" align="center" mb={4}><Text fontSize="xs" fontWeight="bold" color="gray.400" textTransform="uppercase">Nota Parcial</Text><Badge fontSize="2xl" colorScheme={Object.values(notas).reduce((a,b)=>a+b,0) >= (isSimplesMode ? 90 : 900) ? "green" : "teal"} variant="solid" borderRadius="md" px={3}>{Object.values(notas).reduce((a,b)=>a+b,0)}</Badge></Flex>
+                          <Flex justify="space-between" align="center" mb={4}><Text fontSize="xs" fontWeight="bold" color="gray.400" textTransform="uppercase">Nota Parcial</Text><Badge fontSize="2xl" colorScheme={notaTotalFinal >= metaVerde ? "green" : "teal"} variant="solid" borderRadius="md" px={3}>{notaTotalFinal}</Badge></Flex>
                           
                           <HStack spacing={2} w="full">
                               <Tooltip label="Falha Grave" hasArrow placement="top">
@@ -326,6 +435,7 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                               <Tooltip label="✨ Auto-Preencher com IA" hasArrow placement="top">
                                   <IconButton icon={<Text fontSize="md">✨</Text>} bgGradient="linear(to-r, purple.500, blue.500)" color="white" _hover={{ bgGradient: "linear(to-r, purple.600, blue.600)", transform: 'translateY(-1px)' }} onClick={() => gerarCorrecaoIA(1)} isLoading={loadingIA} size="sm" aria-label="IA" />
                               </Tooltip>
+                              
                               {redacaoAtual.status !== 'REFAZER' && (<Button flex={1} onClick={() => abrirConfirmacao("Devolver Redação?", "Perderá todo o progresso.", liberarRedacaoReal, "red", "Devolver")} colorScheme="red" variant="outline" size="sm" fontSize="xs" px={1}>Liberar</Button>)}
                               
                               <Button flex={1} colorScheme="green" onClick={handleFinalizarClick} size="sm" fontSize="xs" shadow="md" px={1}>FINALIZAR</Button>
@@ -333,18 +443,18 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                       </Box>
                       <Box flex="1" overflowY="auto" p={3} display="flex" flexDirection="column" pb={20}>
                           <Accordion allowToggle>
-                              {compsAtuais.map((comp) => (
+                              {compsAtuais.filter(c => c.id !== 0).map((comp) => (
                                   <AccordionItem key={comp.id} border="none" mb={3}>
                                       <h2>
                                           <AccordionButton bg="white" boxShadow="sm" borderRadius="lg" _expanded={{ bg: comp.cor, color: "white" }} py={4} onClick={(e) => { const target = e.currentTarget; setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300); }}>
                                               <Box w="4px" h="40px" bg={comp.cor} borderRadius="full" mr={3} display="block" _expanded={{ bg: "white" }} />
                                               <Box flex='1' textAlign='left'><Text fontSize="sm" fontWeight="bold">{comp.nome}</Text></Box>
-                                              <Badge bg={notas[comp.id] > 0 ? "white" : "gray.100"} color={notas[comp.id] > 0 ? "black" : "gray.500"} borderRadius="md" px={2} py={0.5}>{notas[comp.id] || 0}</Badge>
+                                              <Badge bg={parseFloat(notas[comp.id]||0) > 0 ? "white" : "gray.100"} color={parseFloat(notas[comp.id]||0) > 0 ? "black" : "gray.500"} borderRadius="md" px={2} py={0.5}>{notas[comp.id] || 0}</Badge>
                                           </AccordionButton>
                                       </h2>
                                       <AccordionPanel pb={4} bg="white" mt={-1} borderRadius="0 0 lg lg" border="1px solid" borderColor="gray.100" borderTop="none" display="flex" flexDirection="column">
                                           <VStack align="stretch" spacing={4} pt={2} flex="1">
-                                              <Box><Text fontSize="xs" fontWeight="bold" color="gray.400" mb={2} letterSpacing="wider">NOTA</Text><Flex wrap="wrap" gap={1.5}>{notasPossiveisAtuais.map(val => (<Button key={val} size="xs" h="28px" colorScheme={notas[comp.id] === val ? 'teal' : 'gray'} variant={notas[comp.id] === val ? 'solid' : 'ghost'} onClick={() => setNotas({...notas, [comp.id]: val})} borderRadius="md">{val}</Button>))}</Flex></Box>
+                                              <Box><Text fontSize="xs" fontWeight="bold" color="gray.400" mb={2} letterSpacing="wider">NOTA</Text><Flex wrap="wrap" gap={1.5}>{notasPossiveisAtuais.map(val => (<Button key={val} size="xs" h="28px" colorScheme={parseFloat(notas[comp.id]||0) === val ? 'teal' : 'gray'} variant={parseFloat(notas[comp.id]||0) === val ? 'solid' : 'ghost'} onClick={() => setNotas({...notas, [comp.id]: val})} borderRadius="md">{val}</Button>))}</Flex></Box>
                                               <Box flex="1" display="flex" flexDirection="column">
                                                   <Flex justify="space-between" align="center" mb={1}><Text fontSize="xs" fontWeight="bold" color="gray.400" letterSpacing="wider">COMENTÁRIO OBRIGATÓRIO</Text><Button size="xs" leftIcon={<Text fontSize="xs">⚡</Text>} onClick={() => { setQuickReplyComp(comp.id); setQuickReplyContext('GERAL'); modalRespostas.onOpen(); }} colorScheme="yellow" variant="ghost">Rápidas</Button></Flex>
                                                   <Textarea size="sm" bg="gray.50" border="1px solid" borderColor="gray.200" _focus={{ bg: "white", boxShadow: "outline" }} value={comentarios[comp.id]} onChange={(e) => setComentarios({...comentarios, [comp.id]: e.target.value})} placeholder="Justifique a nota desta competência..." borderRadius="md" minH="calc(100vh - 450px)" resize="none" />
@@ -358,18 +468,110 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                   </Box>
               </Box>
 
-              <Modal isOpen={isOpen} onClose={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }} size="sm" isCentered>
-                <ModalOverlay /><ModalContent borderRadius="xl"><ModalHeader fontSize="md">{editingPinId ? 'Editar Apontamento' : 'Novo Apontamento'}</ModalHeader><ModalCloseButton /><ModalBody><VStack spacing={3}><Box w="full"><Text fontSize="xs" fontWeight="bold" color="gray.500">COMPETÊNCIA</Text><Select size="sm" value={pinCompetencia} onChange={(e) => setPinCompetencia(parseInt(e.target.value))}>{compsAtuais.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Select></Box>{pinCompetencia === 1 && (<Box w="full"><Text fontSize="xs" fontWeight="bold" color="gray.500">TIPO DE ERRO</Text><Select size="sm" placeholder="Selecione..." value={pinTipoErro} onChange={(e) => setPinTipoErro(e.target.value)}>{ERROS_GRAMATICA.map(erro => <option key={erro.value} value={erro.value}>{erro.label}</option>)}</Select></Box>)}<Box w="full"><Flex justify="space-between" align="center" mb={1}><Text fontSize="xs" fontWeight="bold" color="gray.500">OBSERVAÇÃO</Text><Button size="xs" leftIcon={<Text fontSize="xs">⚡</Text>} onClick={() => { setQuickReplyComp(pinCompetencia); setQuickReplyContext('PIN'); modalRespostas.onOpen(); }} colorScheme="yellow" variant="ghost" h="20px">Rápidas</Button></Flex><Textarea size="sm" value={pinTexto} onChange={(e) => setPinTexto(e.target.value)} /></Box></VStack></ModalBody><ModalFooter><Button size="sm" variant="ghost" mr={3} onClick={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }}>Cancelar</Button><Button size="sm" colorScheme="blue" onClick={salvarPin}>Salvar</Button></ModalFooter></ModalContent>
+              <Modal isOpen={modalConfirmacao.isOpen} onClose={modalConfirmacao.onClose} isCentered size="sm">
+                <ModalOverlay backdropFilter="blur(2px)" />
+                <ModalContent borderRadius="xl" overflow="hidden">
+                  <ModalHeader>{confirmacaoConfig.titulo}</ModalHeader>
+                  <ModalCloseButton />
+                  <ModalBody>
+                    <VStack spacing={4} align="center" py={2}>
+                      <WarningTwoIcon w={10} h={10} color={`${confirmacaoConfig.botaoCor}.400`} />
+                      <Text textAlign="center" color="gray.600">{confirmacaoConfig.mensagem}</Text>
+                    </VStack>
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button variant="ghost" mr={3} onClick={modalConfirmacao.onClose}>Cancelar</Button>
+                    <Button colorScheme={confirmacaoConfig.botaoCor} onClick={() => { if(confirmacaoConfig.acao) confirmacaoConfig.acao(); modalConfirmacao.onClose(); }}>{confirmacaoConfig.textoBotao}</Button>
+                  </ModalFooter>
+                </ModalContent>
+              </Modal>
+
+              {/* MODAL DE NOVO APONTAMENTO (LADO A LADO - SPLIT VIEW) */}
+              <Modal isOpen={isOpen} onClose={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }} size="4xl" isCentered>
+                <ModalOverlay backdropFilter="blur(2px)"/>
+                <ModalContent borderRadius="xl" overflow="hidden">
+                  <ModalHeader fontSize="md" borderBottom="1px solid" borderColor="gray.100" bg="gray.50">
+                    <HStack justify="space-between" w="full" pr={8}>
+                        <Text>{editingPinId ? 'Editar Apontamento' : 'Novo Apontamento'}</Text>
+                        {/* ABAS OBRIGADAS A FICAREN NUMA LINHA SÓ COM SCROLL INVISIVEL SE PRECISO */}
+                        <Flex gap={2} w="max-content" bg="white" p={1} borderRadius="md" border="1px solid" borderColor="gray.200">
+                            {compsAtuais.map(c => {
+                                const isSelected = pinCompetencia === c.id;
+                                const baseColor = c.cor === 'black' ? 'gray' : c.cor.split('.')[0];
+                                const labelText = c.id === 0 ? 'OUTROS' : `COMP ${c.id}`;
+                                return (
+                                  <Button 
+                                      key={c.id} size="sm" flexShrink={0} colorScheme={baseColor} variant={isSelected ? 'solid' : 'ghost'}
+                                      bg={isSelected && c.cor === 'black' ? 'black' : undefined} color={isSelected && c.cor === 'black' ? 'white' : undefined}
+                                      _hover={c.cor === 'black' && !isSelected ? { bg: 'gray.100' } : undefined}
+                                      onClick={() => { setPinCompetencia(c.id); setPinTexto(''); setBuscaGabaritoPin(''); }}
+                                  >
+                                      {labelText}
+                                  </Button>
+                                );
+                            })}
+                        </Flex>
+                    </HStack>
+                  </ModalHeader>
+                  <ModalCloseButton />
+                  <ModalBody py={6}>
+                    
+                    <Flex gap={6} align="stretch" h="full">
+                        {/* ESQUERDA: LISTA DE GABARITOS COMPACTA */}
+                        <Box w="40%" display="flex" flexDirection="column" borderRight="1px solid" borderColor="gray.100" pr={6}>
+                            <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={3} textTransform="uppercase">Gabarito Rápido</Text>
+                            {pinCompetencia === 0 ? (
+                                <Text fontSize="sm" color="gray.400" fontStyle="italic" textAlign="center" mt={10}>A categoria OUTROS é de uso livre. Não existem gabaritos pré-configurados.</Text>
+                            ) : (
+                                <>
+                                    <InputGroup size="sm" mb={3}>
+                                        <InputLeftElement pointerEvents="none"><SearchIcon color="gray.400" /></InputLeftElement>
+                                        <Input placeholder="Procurar erro..." bg="gray.50" value={buscaGabaritoPin} onChange={(e) => setBuscaGabaritoPin(e.target.value)} />
+                                    </InputGroup>
+
+                                    <Box flex="1" overflowY="auto" pr={2} h="220px" css={{ '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { background: '#cbd5e0', borderRadius: '4px' } }}>
+                                        {gabaritoPins.filter(p => p.competencia === pinCompetencia && (p.titulo.toLowerCase().includes(buscaGabaritoPin.toLowerCase()) || p.texto.toLowerCase().includes(buscaGabaritoPin.toLowerCase()))).map(p => {
+                                            const compConfig = compsAtuais.find(c => c.id === pinCompetencia);
+                                            return (
+                                                <Tooltip key={p.id} label={p.texto} hasArrow placement="right" bg="gray.700" color="white" fontSize="xs" px={3} py={2} borderRadius="md" maxW="250px">
+                                                    <Flex align="center" justify="space-between" py={2} px={2} borderBottom="1px solid" borderColor="gray.100" cursor="pointer" _hover={{ bg: `${compConfig?.cor.split('.')[0]}.50`, borderRadius: 'md' }} onClick={() => setPinTexto(prev => prev ? prev + '\n' + p.texto : p.texto)}>
+                                                        <Text fontSize="sm" color="gray.700" fontWeight="medium" isTruncated>{p.titulo}</Text>
+                                                        <Icon as={AddIcon} boxSize={3} color="gray.400" />
+                                                    </Flex>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                        {gabaritoPins.filter(p => p.competencia === pinCompetencia && (p.titulo.toLowerCase().includes(buscaGabaritoPin.toLowerCase()) || p.texto.toLowerCase().includes(buscaGabaritoPin.toLowerCase()))).length === 0 && (
+                                            <Text fontSize="xs" color="gray.400" textAlign="center" mt={4}>Nenhum erro encontrado na pesquisa.</Text>
+                                        )}
+                                    </Box>
+                                </>
+                            )}
+                        </Box>
+
+                        {/* DIREITA: CAIXA DE TEXTO */}
+                        <Box w="60%" display="flex" flexDirection="column">
+                            <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={3} textTransform="uppercase">Observação Final do Balão</Text>
+                            <Textarea flex="1" size="sm" value={pinTexto} onChange={(e) => setPinTexto(e.target.value)} placeholder="O texto adicionado no gabarito aparecerá aqui. Podes complementá-lo livremente..." bg="gray.50" resize="none" _focus={{ bg: "white", borderColor: "blue.400" }} />
+                        </Box>
+                    </Flex>
+
+                  </ModalBody>
+                  <ModalFooter bg="gray.50" borderTop="1px solid" borderColor="gray.100">
+                    <Button size="sm" variant="ghost" mr={3} onClick={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }}>Cancelar</Button>
+                    <Button size="sm" colorScheme="blue" onClick={salvarPin}>Salvar Apontamento</Button>
+                  </ModalFooter>
+                </ModalContent>
               </Modal>
 
               <Modal isOpen={modalRespostas.isOpen} onClose={modalRespostas.onClose} isCentered size="lg">
-                <ModalOverlay /><ModalContent borderRadius="xl"><ModalHeader fontSize="md" borderBottom="1px solid #eee">⚡ Usar Resposta Rápida</ModalHeader><ModalCloseButton /><ModalBody py={6}><Flex wrap="wrap" gap={3} mb={6}>{todasRespostas.filter(r => r.competencia === quickReplyComp && r.contexto === quickReplyContext && r.modelo === (isSimplesMode ? 'SIMPLES' : 'ENEM') && (r.modelo !== 'ENEM' || r.competencia !== 1 || r.contexto !== 'PIN' || r.tipo_erro === pinTipoErro)).map((resp) => (<Tooltip key={resp.id} label={resp.texto} hasArrow><Badge p={2} px={3} borderRadius="full" cursor="pointer" colorScheme="blue" variant="subtle" _hover={{ bg: 'blue.100', transform: 'scale(1.05)' }} onClick={() => { if (quickReplyContext === 'GERAL') setComentarios(prev => ({ ...prev, [quickReplyComp]: prev[quickReplyComp] ? prev[quickReplyComp] + '\n' + resp.texto : resp.texto })); else setPinTexto(prev => prev ? prev + '\n' + resp.texto : resp.texto); modalRespostas.onClose(); }}>{resp.titulo}</Badge></Tooltip>))}</Flex></ModalBody></ModalContent>
+                <ModalOverlay /><ModalContent borderRadius="xl" overflow="hidden"><ModalHeader fontSize="md" borderBottom="1px solid #eee">⚡ Usar Resposta Rápida</ModalHeader><ModalCloseButton /><ModalBody py={6}><Flex wrap="wrap" gap={3} mb={6}>{todasRespostas.filter(r => r.competencia === quickReplyComp && r.contexto === quickReplyContext && ((!isPadrao && r.modelo === 'ENEM') || (isPadrao10 ? r.modelo === 'PADRAO_10' : (r.modelo === 'PADRAO_100' || r.modelo === 'SIMPLES'))) && (r.modelo !== 'ENEM' || r.competencia !== 1 || r.contexto !== 'PIN')).map((resp) => (<Tooltip key={resp.id} label={resp.texto} hasArrow><Badge p={2} px={3} borderRadius="full" cursor="pointer" colorScheme="blue" variant="subtle" _hover={{ bg: 'blue.100', transform: 'scale(1.05)' }} onClick={() => { if (quickReplyContext === 'GERAL') setComentarios(prev => ({ ...prev, [quickReplyComp]: prev[quickReplyComp] ? prev[quickReplyComp] + '\n' + resp.texto : resp.texto })); else setPinTexto(prev => prev ? prev + '\n' + resp.texto : resp.texto); modalRespostas.onClose(); }}>{resp.titulo}</Badge></Tooltip>))}</Flex></ModalBody></ModalContent>
               </Modal>
 
               <Modal isOpen={modalProposta.isOpen} onClose={modalProposta.onClose} size="3xl" scrollBehavior="inside">
                   <ModalOverlay backdropFilter="blur(3px)" />
-                  <ModalContent borderRadius="xl" maxH="80vh">
-                      <ModalHeader bg="blue.600" color="white" borderTopRadius="xl">Comando da Proposta & Textos Motivadores</ModalHeader>
+                  <ModalContent borderRadius="xl" overflow="hidden" maxH="80vh">
+                      <ModalHeader bg="blue.600" color="white">Comando da Proposta & Textos Motivadores</ModalHeader>
                       <ModalCloseButton color="white" mt={1} />
                       <ModalBody py={6}>
                           <Heading size="sm" color="gray.700" textTransform="uppercase" borderLeft="4px solid" borderColor="blue.500" pl={3} mb={3}>Comando da Proposta</Heading>
@@ -391,13 +593,13 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                               )}
                           </VStack>
                       </ModalBody>
-                      <ModalFooter bg="gray.50" borderBottomRadius="xl"><Button onClick={modalProposta.onClose}>Fechar</Button></ModalFooter>
+                      <ModalFooter bg="gray.50"><Button onClick={modalProposta.onClose}>Fechar</Button></ModalFooter>
                   </ModalContent>
               </Modal>
 
               <Modal isOpen={modalProblema.isOpen} onClose={modalProblema.onClose} isCentered size="md">
                 <ModalOverlay backdropFilter="blur(4px)" />
-                <ModalContent borderRadius="xl">
+                <ModalContent borderRadius="xl" overflow="hidden">
                   <ModalHeader color={isFalhaGrave ? "red.600" : "orange.600"}><WarningTwoIcon mr={2} /> {isFalhaGrave ? "Reportar Falha Grave" : "Sinalizar Problema de TI"}</ModalHeader>
                   <ModalCloseButton />
                   <ModalBody>
@@ -454,29 +656,10 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                 </ModalContent>
               </Modal>
 
-              <Modal isOpen={modalConfirmacao.isOpen} onClose={modalConfirmacao.onClose} isCentered size="sm">
-                <ModalOverlay backdropFilter="blur(2px)" />
-                <ModalContent borderRadius="xl">
-                  <ModalHeader>{confirmacaoConfig.titulo}</ModalHeader>
-                  <ModalCloseButton />
-                  <ModalBody>
-                    <VStack spacing={4} align="center" py={2}>
-                      <WarningTwoIcon w={10} h={10} color={`${confirmacaoConfig.botaoCor}.400`} />
-                      <Text textAlign="center" color="gray.600">{confirmacaoConfig.mensagem}</Text>
-                    </VStack>
-                  </ModalBody>
-                  <ModalFooter>
-                    <Button variant="ghost" mr={3} onClick={modalConfirmacao.onClose}>Cancelar</Button>
-                    <Button colorScheme={confirmacaoConfig.botaoCor} onClick={() => { if(confirmacaoConfig.acao) confirmacaoConfig.acao(); modalConfirmacao.onClose(); }}>{confirmacaoConfig.textoBotao}</Button>
-                  </ModalFooter>
-                </ModalContent>
-              </Modal>
-
           </Flex>
         );
     }
 
-    const listaPendencias = fila.filter(r => r.status === 'REFAZER');
     let listaGeral = fila.filter(r => r.status !== 'REFAZER' && r.status !== 'CORRIGIDA' && r.status !== 'EM_QA').filter(r => {
         const match = r.tema_titulo.toLowerCase().includes(filtroTexto.toLowerCase()) || (r.id && r.id.toString().includes(filtroTexto.toLowerCase()));
         const matchTipo = filtroTipo === 'TODOS' ? true : (r.tema_tipo || r.tipo || 'ENEM').toUpperCase() === filtroTipo;
@@ -484,6 +667,7 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
         return match && matchTipo;
     }).sort((a, b) => new Date(a.data_envio) - new Date(b.data_envio));
     
+    const listaPendencias = fila.filter(r => r.status === 'REFAZER');
     const qtdUrgentes = listaGeral.filter(r => r.is_urgente || r.vip_pago).length;
     const filaPaginada = listaGeral.slice((paginaAtualFila - 1) * itensPorPaginaFila, paginaAtualFila * itensPorPaginaFila);
 
@@ -515,11 +699,18 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                     </Card>
                 </Box>
             )}
-
-            <Heading size="md" color="gray.700" mb={4}>Fila Geral</Heading>
+            
             <Flex mb={6} gap={4} bg="white" p={5} borderRadius="xl" boxShadow="sm" align="center" border="1px solid" borderColor="gray.100" wrap="wrap">
                 <InputGroup size="md" flex={1} minW="250px"><InputLeftElement pointerEvents='none'><SearchIcon color='gray.400' /></InputLeftElement><Input placeholder="Buscar Tema ou Código..." value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} /></InputGroup>
-                <Select w="150px" size="md" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}><option value="TODOS">Tipo: Todos</option><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option></Select>
+                
+                <Select w="150px" size="md" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+                    <option value="TODOS">Tipo: Todos</option>
+                    <option value="ENEM">ENEM</option>
+                    <option value="PADRAO_100">Padrão 100</option>
+                    <option value="PADRAO_10">Padrão 10</option>
+                    <option value="SIMPLES">Simples</option>
+                </Select>
+
                 <Divider orientation="vertical" h="30px" display={{ base: 'none', md: 'block' }} />
                 <FormControl display='flex' alignItems='center' w="auto"><Switch colorScheme="purple" isChecked={somenteUrgentes} onChange={(e) => setSomenteUrgentes(e.target.checked)} mr={2} /><FormLabel mb='0' fontSize="sm" fontWeight="bold" color="purple.600">Apenas VIPs</FormLabel></FormControl>
             </Flex>
@@ -552,29 +743,10 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                 {listaGeral.length > 0 && (
                     <Flex justify="space-between" align="center" p={4} bg="gray.50" borderTop="1px solid" borderColor="gray.200" wrap="wrap" gap={4}>
                         <HStack><Text fontSize="sm" color="gray.600">Mostrar</Text><Select size="sm" w="80px" bg="white" value={itensPorPaginaFila} onChange={(e) => { setItensPorPaginaFila(Number(e.target.value)); setPaginaAtualFila(1); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></Select></HStack>
-                        <HStack><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.max(1, p - 1))} isDisabled={paginaAtualFila === 1} bg="white">Anterior</Button><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.min(Math.ceil(listaGeral.length / itensPorPaginaFila), p + 1))} isDisabled={paginaAtualFila === Math.ceil(listaGeral.length / itensPorPaginaFila)} bg="white">Próxima</Button></HStack>
+                        <HStack><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.max(1, p - 1))} isDisabled={paginaAtualFila === 1} bg="white">Anterior</Button><Text fontSize="sm" fontWeight="bold" px={2}>{paginaAtualFila} / {Math.ceil(listaGeral.length / itensPorPaginaFila)}</Text><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.min(Math.ceil(listaGeral.length / itensPorPaginaFila), p + 1))} isDisabled={paginaAtualFila === Math.ceil(listaGeral.length / itensPorPaginaFila)} bg="white">Próxima</Button></HStack>
                     </Flex>
                 )}
             </Card>
-
-            <Modal isOpen={modalConfirmacao.isOpen} onClose={modalConfirmacao.onClose} isCentered size="sm">
-              <ModalOverlay backdropFilter="blur(2px)" />
-              <ModalContent borderRadius="xl">
-                <ModalHeader>{confirmacaoConfig.titulo}</ModalHeader>
-                <ModalCloseButton />
-                <ModalBody>
-                  <VStack spacing={4} align="center" py={2}>
-                    <WarningTwoIcon w={10} h={10} color={`${confirmacaoConfig.botaoCor}.400`} />
-                    <Text textAlign="center" color="gray.600">{confirmacaoConfig.mensagem}</Text>
-                  </VStack>
-                </ModalBody>
-                <ModalFooter>
-                  <Button variant="ghost" mr={3} onClick={modalConfirmacao.onClose}>Cancelar</Button>
-                  <Button colorScheme={confirmacaoConfig.botaoCor} onClick={() => { if(confirmacaoConfig.acao) confirmacaoConfig.acao(); modalConfirmacao.onClose(); }}>{confirmacaoConfig.textoBotao}</Button>
-                </ModalFooter>
-              </ModalContent>
-            </Modal>
-
         </Container>
     );
 };

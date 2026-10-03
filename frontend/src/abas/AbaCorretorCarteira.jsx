@@ -8,7 +8,7 @@ import {
   ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, 
   ModalFooter, useToast, Stat, StatLabel, StatNumber 
 } from '@chakra-ui/react';
-import { TimeIcon, DownloadIcon, CheckCircleIcon, AttachmentIcon, ViewIcon, CloseIcon } from '@chakra-ui/icons';
+import { TimeIcon, DownloadIcon, CheckCircleIcon, AttachmentIcon, ViewIcon, CloseIcon, CalendarIcon } from '@chakra-ui/icons';
 import { MdAttachMoney, MdAccountBalanceWallet } from 'react-icons/md';
 import axios from 'axios';
 
@@ -48,7 +48,7 @@ const AbaCorretorCarteira = ({ carteira, solicitarSaque, carregarCarteira, handl
         setEnviandoRecibo(true);
         try {
             const formData = new FormData(); formData.append('arquivo_recibo', arquivoInline);
-            await axios.post(`http://127.0.0.1:8000/api/corretor/pagamento/${carteira.solicitacao_ativa.id}/enviar-recibo/`, formData, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'multipart/form-data' } });
+            await axios.post(`http://127.0.0.1:8000/api/corretor/pagamento/${carteira.pagamento_pendente?.id || carteira.solicitacao_ativa?.id}/enviar-recibo/`, formData, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'multipart/form-data' } });
             toast({ title: 'Enviado com sucesso!', description: 'A equipa financeira vai analisar.', status: 'success' }); setArquivoInline(null); carregarCarteira();
         } catch (e) { toast({ title: 'Erro no envio', status: 'error' }); }
         setEnviandoRecibo(false);
@@ -56,12 +56,11 @@ const AbaCorretorCarteira = ({ carteira, solicitarSaque, carregarCarteira, handl
 
     const cancelarSaque = async () => {
         try {
-            await axios.post(`http://127.0.0.1:8000/api/corretor/cancelar-saque/${carteira.solicitacao_ativa.id}/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+            await axios.post(`http://127.0.0.1:8000/api/corretor/cancelar-saque/${carteira.pagamento_pendente?.id || carteira.solicitacao_ativa?.id}/`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
             toast({ title: 'Saque cancelado.', status: 'info' }); carregarCarteira();
         } catch (error) { toast({ title: 'Erro', description: error.response?.data?.erro, status: 'error' }); }
     };
 
-    // IMPRESSÃO CORRIGIDA COM CABEÇALHO FLEX
     const imprimirAnexoRedacoes = (recibo) => {
         const baseUrl = window.location.origin;
         const redacoesDoRecibo = carteira.transacoes?.filter(t => t.pagamento_id === recibo.id) || [];
@@ -90,40 +89,61 @@ const AbaCorretorCarteira = ({ carteira, solicitarSaque, carregarCarteira, handl
         { title: 'Solicitado', description: 'Garantia de Saldo' }, { title: 'Envio do Recibo', description: 'Assinatura (RPA)' }, 
         { title: 'Em Análise', description: 'Equipe Financeira' }, { title: 'Pagamento Realizado', description: 'PIX/Transferência' }
     ];
+    
     let activeStep = 0;
-    if (carteira.solicitacao_ativa) { 
-        if (carteira.solicitacao_ativa.status === 'AGUARDANDO_RECIBO' || carteira.solicitacao_ativa.status === 'RECUSADO') activeStep = 1; 
-        else if (carteira.solicitacao_ativa.status === 'EM_ANALISE') activeStep = 2; 
+    const pendenteInfo = carteira.pagamento_pendente || carteira.solicitacao_ativa;
+    
+    if (pendenteInfo) { 
+        if (pendenteInfo.status === 'AGUARDANDO_RECIBO' || pendenteInfo.status === 'RECUSADO') activeStep = 1; 
+        else if (pendenteInfo.status === 'EM_ANALISE') activeStep = 2; 
+        else if (pendenteInfo.status === 'AGENDADO') activeStep = 3; 
     }
 
     return (
         <Container maxW="container.xl" py={8}>
             <Heading size="lg" color="teal.600" mb={6}>Minha Carteira</Heading>
             
-            {carteira.solicitacao_ativa ? (
+            {pendenteInfo ? (
                 <Card bg="white" shadow="md" borderRadius="xl" border="1px solid" borderColor="gray.200" mb={8} overflow="hidden">
                     <Box bg="gray.50" p={6} borderBottom="1px solid" borderColor="gray.200">
                         <Flex justify="space-between" align="center" mb={4}>
                             <Heading size="sm" color="gray.600">Status do Saque</Heading>
-                            <Button size="xs" colorScheme="red" variant="ghost" onClick={cancelarSaque} leftIcon={<CloseIcon />}>Cancelar Saque</Button>
+                            {pendenteInfo.status !== 'AGENDADO' && (
+                                <Button size="xs" colorScheme="red" variant="ghost" onClick={cancelarSaque} leftIcon={<CloseIcon />}>Cancelar Saque</Button>
+                            )}
                         </Flex>
                         <Stepper size="lg" colorScheme="teal" index={activeStep}>{steps.map((step, index) => (<Step key={index}><StepIndicator><StepStatus complete={<StepIcon />} incomplete={<StepNumber />} active={<StepNumber />} /></StepIndicator><Box flexShrink='0' display={{ base: 'none', md: 'block' }}><StepTitle>{step.title}</StepTitle><StepDescription>{step.description}</StepDescription></Box><StepSeparator /></Step>))}</Stepper>
                     </Box>
                     <CardBody p={8}>
-                        {carteira.solicitacao_ativa.status === 'AGUARDANDO_RECIBO' && (
+                        {pendenteInfo.status === 'AGUARDANDO_RECIBO' && (
                             <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} alignItems="center">
-                                <Box><Heading size="md" color="teal.700" mb={3}>Estamos quase lá!</Heading><Text color="gray.600" mb={4} lineHeight="tall">Para liberar o seu pagamento de <strong>R$ {parseFloat(carteira.solicitacao_ativa.valor).toFixed(2).replace('.', ',')}</strong>, precisamos do seu <strong>Recibo (RPA)</strong> assinado.</Text><Button size="lg" colorScheme="teal" leftIcon={<DownloadIcon />} onClick={() => handlePrintRecibo(carteira.solicitacao_ativa)} shadow="md">1. Imprimir Recibo Oficial</Button></Box>
+                                <Box><Heading size="md" color="teal.700" mb={3}>Estamos quase lá!</Heading><Text color="gray.600" mb={4} lineHeight="tall">Para liberar o seu pagamento de <strong>R$ {parseFloat(pendenteInfo.valor).toFixed(2).replace('.', ',')}</strong>, precisamos do seu <strong>Recibo (RPA)</strong> assinado.</Text><Button size="lg" colorScheme="teal" leftIcon={<DownloadIcon />} onClick={() => handlePrintRecibo(pendenteInfo)} shadow="md">1. Imprimir Recibo Oficial</Button></Box>
                                 <Box w="full" h="200px" border="2px dashed" borderColor={arquivoInline ? "green.400" : "teal.300"} borderRadius="xl" display="flex" flexDirection="column" alignItems="center" justifyContent="center" bg={arquivoInline ? "green.50" : "teal.50"} cursor="pointer" onClick={() => fileInputInlineRef.current.click()} transition="all 0.2s" _hover={{ bg: arquivoInline ? 'green.100' : 'teal.100' }} p={4}><Icon as={arquivoInline ? CheckCircleIcon : AttachmentIcon} boxSize={10} color={arquivoInline ? "green.500" : "teal.500"} mb={3} /><Text fontSize="md" color={arquivoInline ? "green.800" : "teal.800"} fontWeight="bold" textAlign="center">{arquivoInline ? arquivoInline.name : "2. Anexe aqui o recibo assinado"}</Text>{!arquivoInline && <Text fontSize="sm" color="teal.600" mt={1}>Clique para selecionar (PDF ou Foto)</Text>}{arquivoInline && (<Button mt={4} size="sm" colorScheme="green" onClick={(e) => { e.stopPropagation(); enviarReciboInline(); }} isLoading={enviandoRecibo} shadow="md">Confirmar e Enviar</Button>)}</Box><Input type="file" display="none" ref={fileInputInlineRef} onChange={e => setArquivoInline(e.target.files[0])} accept="image/*,.pdf" />
                             </SimpleGrid>
                         )}
-                        {carteira.solicitacao_ativa.status === 'RECUSADO' && (
+                        {pendenteInfo.status === 'RECUSADO' && (
                             <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} alignItems="center">
-                                <Box><Alert status="error" borderRadius="md" mb={4} flexDirection="column" alignItems="start" p={5}><HStack mb={2}><AlertIcon /><Heading size="sm">Ops! Problema no recibo.</Heading></HStack><Text fontSize="sm">A equipa financeira encontrou o seguinte problema:</Text><Text fontWeight="bold" mt={2} bg="white" p={3} borderRadius="md" w="full">"{carteira.solicitacao_ativa.motivo_recusa}"</Text></Alert><Button size="md" colorScheme="gray" leftIcon={<DownloadIcon />} onClick={() => handlePrintRecibo(carteira.solicitacao_ativa)}>Imprimir Novamente</Button></Box>
+                                <Box><Alert status="error" borderRadius="md" mb={4} flexDirection="column" alignItems="start" p={5}><HStack mb={2}><AlertIcon /><Heading size="sm">Ops! Problema no recibo.</Heading></HStack><Text fontSize="sm">A equipa financeira encontrou o seguinte problema:</Text><Text fontWeight="bold" mt={2} bg="white" p={3} borderRadius="md" w="full">"{pendenteInfo.motivo_recusa}"</Text></Alert><Button size="md" colorScheme="gray" leftIcon={<DownloadIcon />} onClick={() => handlePrintRecibo(pendenteInfo)}>Imprimir Novamente</Button></Box>
                                 <Box w="full" h="200px" border="2px dashed" borderColor={arquivoInline ? "green.400" : "red.300"} borderRadius="xl" display="flex" flexDirection="column" alignItems="center" justifyContent="center" bg={arquivoInline ? "green.50" : "red.50"} cursor="pointer" onClick={() => fileInputInlineRef.current.click()} transition="all 0.2s" _hover={{ bg: arquivoInline ? 'green.100' : 'red.100' }} p={4}><Icon as={arquivoInline ? CheckCircleIcon : AttachmentIcon} boxSize={10} color={arquivoInline ? "green.500" : "red.500"} mb={3} /><Text fontSize="md" color={arquivoInline ? "green.800" : "red.800"} fontWeight="bold" textAlign="center">{arquivoInline ? arquivoInline.name : "Anexe o novo recibo corrigido"}</Text>{arquivoInline && (<Button mt={4} size="sm" colorScheme="green" onClick={(e) => { e.stopPropagation(); enviarReciboInline(); }} isLoading={enviandoRecibo} shadow="md">Confirmar e Reenviar</Button>)}</Box><Input type="file" display="none" ref={fileInputInlineRef} onChange={e => setArquivoInline(e.target.files[0])} accept="image/*,.pdf" />
                             </SimpleGrid>
                         )}
-                        {carteira.solicitacao_ativa.status === 'EM_ANALISE' && (
+                        {pendenteInfo.status === 'EM_ANALISE' && (
                             <Flex direction="column" align="center" justify="center" py={4}><TimeIcon boxSize={12} color="blue.400" mb={4} animation="pulse 2s infinite" /><Heading size="md" color="blue.700" mb={2}>Documentação em Análise</Heading><Text color="gray.500" textAlign="center" maxW="lg">Recebemos o seu documento perfeitamente. A nossa equipa financeira está a validá-lo e o seu PIX/Transferência será processado em breve.</Text></Flex>
+                        )}
+                        {pendenteInfo.status === 'AGENDADO' && (
+                            <Flex direction="column" align="center" justify="center" py={4} bg="green.50" borderRadius="xl" border="1px solid" borderColor="green.200">
+                                <Icon as={CalendarIcon} boxSize={10} color="green.500" mb={3} />
+                                <Heading size="md" color="green.700" mb={2}>Pagamento Agendado!</Heading>
+                                <Text color="gray.600" textAlign="center" maxW="lg" mb={3}>
+                                    O seu recibo foi validado pela nossa equipa financeira e o pagamento de <strong>R$ {parseFloat(pendenteInfo.valor).toFixed(2).replace('.', ',')}</strong> já foi agendado junto ao banco.
+                                </Text>
+                                <HStack bg="white" p={3} borderRadius="lg" border="1px solid" borderColor="green.300" shadow="sm">
+                                    <Text fontWeight="bold" color="green.800">Previsão de Crédito na Conta:</Text>
+                                    <Badge colorScheme="green" px={3} py={1} fontSize="md" borderRadius="md">
+                                        {pendenteInfo.data_prevista_pagamento ? pendenteInfo.data_prevista_pagamento.split('-').reverse().join('/') : 'Processando...'}
+                                    </Badge>
+                                </HStack>
+                            </Flex>
                         )}
                     </CardBody>
                 </Card>

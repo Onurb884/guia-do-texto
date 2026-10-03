@@ -31,7 +31,12 @@ const AbaCorretorHistorico = ({ historico, abrirFeedbackHistorico }) => {
             <Heading size="lg" color="teal.600" mb={6}>Meu Histórico</Heading>
             <Flex gap={4} bg="white" p={5} borderRadius="xl" boxShadow="sm" align="center" border="1px solid" borderColor="gray.100" mb={6} wrap="wrap">
                 <InputGroup flex={1} minW="250px"><InputLeftElement pointerEvents='none'><SearchIcon color='gray.400'/></InputLeftElement><Input placeholder="Buscar Tema ou Cód..." value={filtroHistTexto} onChange={e => setFiltroHistTexto(e.target.value)} /></InputGroup>
-                <Select w="150px" value={filtroHistTipo} onChange={e => setFiltroHistTipo(e.target.value)}><option value="TODOS">Tipo: Todos</option><option value="ENEM">ENEM</option><option value="SIMPLES">Simples</option></Select>
+                <Select w="180px" value={filtroHistTipo} onChange={e => setFiltroHistTipo(e.target.value)}>
+                    <option value="TODOS">Tipo: Todos</option>
+                    <option value="ENEM">ENEM</option>
+                    <option value="PADRAO_100">PADRÃO 100</option>
+                    <option value="PADRAO_10">PADRÃO 10</option>
+                </Select>
                 <Divider orientation="vertical" h="30px" display={{base: 'none', md: 'block'}} />
                 <HStack spacing={2}><Text fontSize="sm" color="gray.500" fontWeight="medium">Data:</Text><Input type="date" size="md" value={filtroHistData} onChange={e => setFiltroHistData(e.target.value)} w="170px" /></HStack>
             </Flex>
@@ -44,11 +49,18 @@ const AbaCorretorHistorico = ({ historico, abrirFeedbackHistorico }) => {
                             {histPaginado.map(h => {
                                 const tipoRedacao = h.tema_tipo || h.tipo || 'ENEM';
                                 const estrelas = h.avaliacao_aluno || 0;
+                                const isPadrao10 = tipoRedacao === 'PADRAO_10';
+                                const isPadrao = tipoRedacao.includes('PADRAO') || tipoRedacao === 'SIMPLES';
+                                const meta = isPadrao10 ? 9 : (isPadrao ? 90 : 900);
                                 return (
                                     <Tr key={h.id} _hover={{ bg: 'gray.50' }}>
                                         <Td fontWeight="bold" color="gray.500" px={4}>#{h.id}</Td>
                                         <Td fontWeight="medium" isTruncated px={4} title={h.tema_titulo}>{h.tema_titulo}</Td>
-                                        <Td px={3} textAlign="center"><Badge bg={tipoRedacao === 'ENEM' ? 'green.50' : 'blue.50'} color={tipoRedacao === 'ENEM' ? 'green.700' : 'blue.700'} px={2} py={1} borderRadius="md" fontWeight="bold">{tipoRedacao}</Badge></Td>
+                                        <Td px={3} textAlign="center">
+                                            <Badge bg={tipoRedacao === 'ENEM' ? 'green.50' : (isPadrao10 ? 'purple.50' : 'blue.50')} color={tipoRedacao === 'ENEM' ? 'green.700' : (isPadrao10 ? 'purple.700' : 'blue.700')} px={2} py={1} borderRadius="md" fontWeight="bold">
+                                                {tipoRedacao.replace('_', ' ')}
+                                            </Badge>
+                                        </Td>
                                         <Td fontSize="sm" px={3} color="gray.600" textAlign="center">{new Date(h.data_correcao || h.data_envio).toLocaleDateString()}</Td>
                                         <Td px={3} textAlign="center">
                                             {estrelas > 0 ? (
@@ -57,7 +69,7 @@ const AbaCorretorHistorico = ({ historico, abrirFeedbackHistorico }) => {
                                                 </Badge>
                                             ) : ( <Text fontSize="xs" color="gray.400">-</Text> )}
                                         </Td>
-                                        <Td fontWeight="bold" px={3} textAlign="center" color={h.nota_final >= (tipoRedacao === 'SIMPLES' ? 90 : 900) ? 'green.500' : 'gray.700'}>{h.nota_final}</Td>
+                                        <Td fontWeight="bold" px={3} textAlign="center" color={parseFloat(h.nota_final) >= meta ? 'green.500' : 'gray.700'}>{h.nota_final}</Td>
                                         <Td px={4} textAlign="center"><Tooltip label="Ver Feedback"><IconButton size="sm" colorScheme="blue" variant="ghost" onClick={() => abrirFeedbackHistorico(h.id)} icon={<ViewIcon />} /></Tooltip></Td>
                                     </Tr>
                                 );
