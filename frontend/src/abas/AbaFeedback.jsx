@@ -36,12 +36,19 @@ const renderComentarioParaAluno = (texto) => {
             content = part.replace(titleMatch[0], '').trim();
             const tUpper = tagOriginal.toUpperCase();
             
+            // TRAVA DE INVISIBILIDADE: O aluno não vê os carimbos internos de QA da coordenação.
+            if (tUpper.includes("FALSO POSITIVO QA")) {
+                return null;
+            }
+
             if (tUpper.includes("FALHA GRAVE CONFIRMADA") || tUpper.includes("REDAÇÃO DEVOLVIDA")) {
                 title = "Motivo do Cancelamento"; color = "red";
             } else if (tUpper.includes("RECURSO SOLICITADO")) {
                 title = "Seu Pedido de Revisão"; color = "cyan";
             } else if (tUpper.includes("RESPOSTA AO RECURSO")) {
                 title = "Parecer da Coordenação"; color = "purple";
+            } else if (tUpper.includes("NOTA REVISADA PELA COORDENAÇÃO")) {
+                title = "Nota Revisada (Qualidade)"; color = "green";
             } else {
                 title = "Aviso Especial"; color = "orange";
             }
@@ -109,14 +116,22 @@ const AbaFeedback = ({ redacao, voltar, carregarDadosIniciais }) => {
     const isPadrao10 = redacao?.tema_tipo === 'PADRAO_10' || redacao?.tipo === 'PADRAO_10';
     const numComps = isPadrao ? [1,2,3,4] : [1,2,3,4,5];
 
+    // LÓGICA DE SEGURANÇA E BLOQUEIO DO RECURSO
     const isCancelada = redacao?.status === 'DEVOLVIDA' || redacao?.status === 'ANULADA';
     const dataConclusao = new Date(redacao?.data_atualizacao || redacao?.data_envio || new Date());
     const diasPassados = (new Date() - dataConclusao) / (1000 * 60 * 60 * 24);
     const prazoExpirado = diasPassados > 7;
     const vereditoFinal = redacao?.correcao?.comentario_geral?.includes('[FALHA GRAVE CONFIRMADA]');
-    const podeContestar = !isCancelada && !prazoExpirado && !vereditoFinal;
+    
+    // BLOQUEIO SUPREMO: Impede que clique "Contestar" se já tiver pedido alguma vez.
+    const jaPediuRecurso = redacao?.status === 'EM_RECURSO' || redacao?.status === 'RECURSO' || redacao?.status === 'REFAZER' || redacao?.correcao?.comentario_geral?.includes('[RECURSO SOLICITADO]') || redacao?.correcao?.comentario_geral?.includes('[RESPOSTA AO RECURSO]');
+    
+    const podeContestar = !isCancelada && !prazoExpirado && !vereditoFinal && !jaPediuRecurso;
 
-    const tooltipContestarTexto = vereditoFinal ? "A decisão da coordenação é irreversível." : prazoExpirado ? "O prazo de 7 dias expirou." : "Pedir revisão à coordenação.";
+    let tooltipContestarTexto = "Pedir revisão à coordenação.";
+    if (vereditoFinal) tooltipContestarTexto = "A decisão da coordenação é irreversível.";
+    else if (prazoExpirado) tooltipContestarTexto = "O prazo de 7 dias expirou.";
+    else if (jaPediuRecurso) tooltipContestarTexto = "O recurso já foi solicitado ou julgado.";
 
     const descricaoProposta = temaCompleto?.descricao || redacao.tema_descricao || '';
     const motivadoresAtuais = temaCompleto?.motivadores || redacao.motivadores || redacao.tema_motivadores || [];
@@ -282,7 +297,9 @@ const AbaFeedback = ({ redacao, voltar, carregarDadosIniciais }) => {
                     {!isCancelada && (
                         <Tooltip label={tooltipContestarTexto} hasArrow>
                             <Box display="inline-block">
-                                <Button size="sm" colorScheme="orange" onClick={modalRecurso.onOpen} isDisabled={!podeContestar} leftIcon={<WarningTwoIcon />} shadow="sm">Contestar</Button>
+                                <Button size="sm" colorScheme="orange" onClick={modalRecurso.onOpen} isDisabled={!podeContestar} leftIcon={<WarningTwoIcon />} shadow="sm">
+                                    {jaPediuRecurso ? 'Recurso Solicitado' : 'Contestar'}
+                                </Button>
                             </Box>
                         </Tooltip>
                     )}

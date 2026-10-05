@@ -13,7 +13,8 @@ import {
 import { 
   ViewIcon, ViewOffIcon, DeleteIcon, EditIcon, CopyIcon, AttachmentIcon, 
   DownloadIcon, CheckCircleIcon, WarningTwoIcon, ArrowBackIcon, StarIcon, 
-  WarningIcon, CloseIcon, InfoIcon, ArrowUpIcon, SearchIcon, TimeIcon, AddIcon
+  WarningIcon, CloseIcon, InfoIcon, ArrowUpIcon, SearchIcon, TimeIcon, AddIcon,
+  ChevronDownIcon, ChevronUpIcon
 } from '@chakra-ui/icons';
 
 const UserIcon = (props) => (<Icon viewBox="0 0 24 24" {...props}><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></Icon>);
@@ -33,7 +34,6 @@ const CustomPinSVG = ({ cor, numero }) => (
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const formatarTexto = (texto) => { if (!texto) return ''; if (texto.includes('<p>') || texto.includes('<span')) return texto; return texto.replace(/\n/g, '<br />').replace(/\*(.*?)\*/g, '<strong>$1</strong>').replace(/_(.*?)_/g, '<em>$1</em>').replace(/~(.*?)~/g, '<u>$1</u>'); };
 
-// RESTAURAMOS OS NOMES COMPLETOS PARA A SIDEBAR (E O PIN 0 É O "OUTROS")
 const COMPETENCIAS_ENEM = [
     { id: 1, nome: '1. Gramática', cor: 'red.500', bg: 'red.50' }, 
     { id: 2, nome: '2. Tema/Estrutura/Repertório', cor: 'blue.500', bg: 'blue.50' }, 
@@ -74,17 +74,25 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
     const [isDrawing, setIsDrawing] = useState(false);
     const [startPoint, setStartPoint] = useState(null);
     const [currentBox, setCurrentBox] = useState(null);
+    
     const [editingPinId, setEditingPinId] = useState(null); 
+    const [pinCompetencia, setPinCompetencia] = useState(1);
+    const [pinTexto, setPinTexto] = useState('');
+    
+    // Controles do Modal Flutuante & Arrastável
+    const [isPinModalMinimized, setIsPinModalMinimized] = useState(false);
+    const [modalPos, setModalPos] = useState({ x: 0, y: 0 });
+    const [isDraggingModal, setIsDraggingModal] = useState(false);
+    const dragRef = useRef({ startX: 0, startY: 0, lastX: 0, lastY: 0 });
+
+    const [tipoGabaritoView, setTipoGabaritoView] = useState('ERRO');
+
     const [tempoRestanteStr, setTempoRestanteStr] = useState('');
     const [loadingIA, setLoadingIA] = useState(false);
     
     const [mostrarPins, setMostrarPins] = useState(true);
     const [filtroCompetenciaView, setFiltroCompetenciaView] = useState(null);
 
-    const [pinCompetencia, setPinCompetencia] = useState(1);
-    const [pinTexto, setPinTexto] = useState('');
-    
-    // GABARITO DE PINS & BUSCA
     const [gabaritoPins, setGabaritoPins] = useState([]);
     const [buscaGabaritoPin, setBuscaGabaritoPin] = useState('');
 
@@ -155,25 +163,75 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
 
     const abrirConfirmacao = (t, m, a, c = 'blue', tb = 'Sim') => { setConfirmacaoConfig({ titulo: t, mensagem: m, acao: a, botaoCor: c, textoBotao: tb }); modalConfirmacao.onOpen(); };
 
+    // =========================================================================
+    // PEGAR REDAÇÃO - LÓGICA DE ABERTURA BLINDADA
+    // =========================================================================
     const pegarRedacao = async (id) => { 
-        const token = localStorage.getItem('token'); 
-        const idClicado = id.toString();
-        const redacaoPresa = fila.find(r => (r.status === 'EM_CORRECAO' || r.status === 'REFAZER') && r.corretor_atual === usuario.id);
+        try {
+            if (!id || !usuario?.id) return;
+            const token = localStorage.getItem('token'); 
+            const idClicado = String(id);
+            const currentUserId = String(usuario.id);
 
-        if (redacaoPresa && redacaoPresa.id.toString() !== idClicado) {
-            abrirConfirmacao("Atenção: Redação Aberta!", `O servidor indica que você já iniciou a correção da redação #${redacaoPresa.id}. Conclua ou devolva a redação #${redacaoPresa.id} antes de puxar uma nova da fila.`, () => { localStorage.setItem('redacao_em_andamento', redacaoPresa.id); carregarDadosRedacao(redacaoPresa.id, token); }, "orange", "Retornar à Redação");
-            return; 
-        }
+            // Busca na fila a redação EM_CORRECAO que pertence a este corretor
+            const minhaEmCorrecao = (fila || []).find(r => r.status === 'EM_CORRECAO' && String(r.corretor_atual) === currentUserId);
+            
+            // O Bloqueio Inteligente: Se ele tem uma aberta e clica noutra DIFERENTE!
+            if (minhaEmCorrecao && String(minhaEmCorrecao.id) !== idClicado) {
+                abrirConfirmacao(
+                    "Atenção: Redação em Correção!", 
+                    `Você já possui a redação #${minhaEmCorrecao.id} em correção. Você deve concluí-la ou liberá-la antes de abrir outra.`, 
+                    () => { 
+                        // Ao clicar no botão, leva para a redação que já estava aberta
+                        localStorage.setItem('redacao_em_andamento', String(minhaEmCorrecao.id)); 
+                        carregarDadosRedacao(minhaEmCorrecao.id, token); 
+                    }, 
+                    "blue", 
+                    "Ir para a Redação"
+                );
+                return; 
+            }
 
-        localStorage.removeItem('redacao_em_andamento'); 
-        localStorage.removeItem('correcao_endtime');
+            // Se for a mesma redação, ou se ele não tinha nenhuma aberta, segue o fluxo normal!
+            localStorage.removeItem('redacao_em_andamento'); 
+            localStorage.removeItem('correcao_endtime');
 
-        try { 
-            const r = await axios.post(`http://127.0.0.1:8000/api/corrigir/${id}/iniciar/`, {}, { headers: { Authorization: `Bearer ${token}` } }); 
-            localStorage.setItem('correcao_endtime', Date.now() + ((r.data.minutos_limite || 40) * 60 * 1000)); 
+            // Bate na API para prender a redação no nome dele (O Python agora também tem segurança multi-abas)
+            const responseIniciar = await axios.post(`http://127.0.0.1:8000/api/corrigir/${id}/iniciar/`, {}, { headers: { Authorization: `Bearer ${token}` } }); 
+            
+            localStorage.setItem('correcao_endtime', Date.now() + ((responseIniciar.data.minutos_limite || 40) * 60 * 1000)); 
             localStorage.setItem('redacao_em_andamento', idClicado); 
-            carregarDadosRedacao(idClicado, token); 
-        } catch (error) { toast({ title: 'Atenção', description: error.response?.data?.erro || "Erro ao abrir.", status: 'warning' }); carregarFila(); } 
+            
+            await carregarDadosRedacao(idClicado, token); 
+
+            // Atualiza a Fila em Tempo Real (Avisa a tabela que o status mudou sem F5)
+            if (carregarFila) carregarFila();
+
+        } catch (error) { 
+            console.error("Erro interno ao puxar redação:", error);
+            
+            // SEGUNDA CAMADA DE SEGURANÇA: Se abriu abas no navegador e o Python bloqueou o pedido
+            if (error.response?.status === 400 || error.response?.status === 409 || error.response?.data?.erro?.includes('andamento')) {
+                const currentUserId = String(usuario?.id);
+                const emAndamentoBack = (fila || []).find(r => r.status === 'EM_CORRECAO' && String(r.corretor_atual) === currentUserId);
+                if (emAndamentoBack) {
+                    abrirConfirmacao(
+                        "Redação Pendente!", 
+                        `O servidor indica que você já possui a redação #${emAndamentoBack.id} em andamento noutra janela.`, 
+                        () => { 
+                            localStorage.setItem('redacao_em_andamento', String(emAndamentoBack.id)); 
+                            carregarDadosRedacao(emAndamentoBack.id, token); 
+                        }, 
+                        "blue", 
+                        "Ir para a Redação"
+                    );
+                    return;
+                }
+            }
+
+            toast({ title: 'Atenção', description: error.response?.data?.erro || "Erro inesperado ao tentar abrir a redação.", status: 'warning', duration: 5000, isClosable: true }); 
+            if (carregarFila) carregarFila(); 
+        } 
     };
 
     const carregarDadosRedacao = async (id, token) => { 
@@ -209,7 +267,10 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
             
             setFiltroCompetenciaView(null); 
             setNotas(newNotas); setComentarios(newComents); setPins(newPins); setMensagemRefacao(alertaCoord); localStorage.setItem('redacao_em_andamento', id); 
-        } catch (e) { toast({ title: 'Erro ao baixar redação', status: 'error' }); } 
+        } catch (e) { 
+            console.error("Erro no carregarDadosRedacao:", e);
+            toast({ title: 'Erro ao baixar redação', description: e.message, status: 'error' }); 
+        } 
     };
 
     const calcularNotaFinal = () => {
@@ -229,7 +290,7 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
         const competenciasFaltandoPins = numComps.filter(compID => !pins.some(p => p.competencia === compID));
         if (competenciasFaltandoPins.length > 0) {
             const nomesFaltando = competenciasFaltandoPins.map(c => `C${c}`).join(', '); 
-            return toast({ title: 'Marcações Incompletas', description: `Faça pelo menos uma marcação (pin) nas competências: ${nomesFaltando}.`, status: 'warning', duration: 6000, isClosable: true });
+            return toast({ title: 'Marcações Incompletas', description: `Faça pelo menos uma marcação (pin) nas competências: ${nomesFaltando}. (Use um Elogio se a nota for máxima)`, status: 'warning', duration: 6000, isClosable: true });
         }
         for (let i = 0; i < numComps.length; i++) {
             const compID = numComps[i];
@@ -279,9 +340,31 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
     };
 
     const getCoords = (e) => { if (!imageContainerRef.current) return { x: 0, y: 0 }; const r = imageContainerRef.current.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 }; };
-    const handleMouseDown = (e) => { if (e.target.closest('.chakra-popover__popper') || e.target.closest('.pin-trigger')) return; e.preventDefault(); const c = getCoords(e); setStartPoint(c); setIsDrawing(true); setCurrentBox({ x: c.x, y: c.y, width: 0, height: 0 }); };
-    const handleMouseMove = (e) => { if (!isDrawing || !startPoint) return; const c = getCoords(e); setCurrentBox({ x: Math.min(startPoint.x, c.x), y: Math.min(startPoint.y, c.y), width: Math.abs(c.x - startPoint.x), height: Math.abs(c.y - startPoint.y) }); };
-    const handleMouseUp = () => { if (!isDrawing) return; setIsDrawing(false); if (currentBox.width < 1 || currentBox.height < 1) { setCurrentBox({ ...currentBox, width: 4, height: 2 }); } setEditingPinId(null); setPinCompetencia(1); setPinTexto(''); setBuscaGabaritoPin(''); onOpen(); };
+    
+    // Eventos de clique para desenhar o PIN
+    const handleMouseDown = (e) => { 
+        if (e.target.closest('.chakra-popover__popper') || e.target.closest('.pin-trigger') || e.target.closest('.floating-modal-container')) return; 
+        e.preventDefault(); 
+        const c = getCoords(e); 
+        setStartPoint(c); 
+        setIsDrawing(true); 
+        setCurrentBox({ x: c.x, y: c.y, width: 0, height: 0 }); 
+    };
+    const handleMouseMove = (e) => { 
+        if (!isDrawing || !startPoint) return; 
+        const c = getCoords(e); 
+        setCurrentBox({ x: Math.min(startPoint.x, c.x), y: Math.min(startPoint.y, c.y), width: Math.abs(c.x - startPoint.x), height: Math.abs(c.y - startPoint.y) }); 
+    };
+    
+    const handleMouseUp = () => { 
+        if (!isDrawing) return; 
+        setIsDrawing(false); 
+        if (currentBox.width < 1 || currentBox.height < 1) { setCurrentBox({ ...currentBox, width: 4, height: 2 }); } 
+        setEditingPinId(null); setPinCompetencia(1); setPinTexto(''); setBuscaGabaritoPin(''); 
+        setTipoGabaritoView('ERRO'); // Reset padrão
+        setIsPinModalMinimized(false); setModalPos({ x: 0, y: 0 }); // Restaura posição central
+        onOpen(); 
+    };
     
     const handleEditPin = (pin) => { 
         setEditingPinId(pin.id); 
@@ -289,7 +372,27 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
         setPinTexto(pin.texto || ''); 
         setCurrentBox(null); 
         setBuscaGabaritoPin('');
+        setTipoGabaritoView('ERRO');
+        setIsPinModalMinimized(false); setModalPos({ x: 0, y: 0 }); // Restaura posição central
         onOpen(); 
+    };
+
+    // Funções para Arrastar o Modal Livremente
+    const handleModalPointerDown = (e) => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
+        setIsDraggingModal(true);
+        dragRef.current = { startX: e.clientX, startY: e.clientY, lastX: modalPos.x, lastY: modalPos.y };
+        e.target.setPointerCapture(e.pointerId);
+    };
+    const handleModalPointerMove = (e) => {
+        if (!isDraggingModal) return;
+        const deltaX = e.clientX - dragRef.current.startX;
+        const deltaY = e.clientY - dragRef.current.startY;
+        setModalPos({ x: dragRef.current.lastX + deltaX, y: dragRef.current.lastY + deltaY });
+    };
+    const handleModalPointerUp = (e) => {
+        setIsDraggingModal(false);
+        e.target.releasePointerCapture(e.pointerId);
     };
     
     const salvarPin = () => { 
@@ -405,11 +508,10 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                                       </Box>
                                   </PopoverTrigger>
                                   <Portal>
-                                      {/* POPOVER: Forçando zIndex altíssimo */}
                                       <PopoverContent rootProps={{ style: { zIndex: 99999 } }} zIndex={99999} width="280px" boxShadow="xl" borderRadius="2xl" overflow="hidden" border="1px solid" borderColor="gray.100" onMouseEnter={() => setHoveredPinId(pin.id)} onMouseLeave={() => setHoveredPinId(null)}>
                                           <PopoverArrow /> <PopoverCloseButton /> 
-                                          <PopoverHeader fontWeight="bold" fontSize="sm">{getPinTitle(pin)}</PopoverHeader>
-                                          <PopoverBody><Text fontSize="sm" mb={3} noOfLines={3}>{pin.texto || "Sem observações."}</Text><HStack spacing={2}><Button size="xs" colorScheme="blue" variant="outline" leftIcon={<EditIcon />} width="50%" onClick={() => handleEditPin(pin)}>Editar</Button><Button size="xs" colorScheme="red" variant="outline" leftIcon={<DeleteIcon />} width="50%" onClick={() => removerPin(pin.id)}>Excluir</Button></HStack></PopoverBody>
+                                          <PopoverHeader bg={config.bg} fontWeight="bold" color={config.cor} borderBottom="none" fontSize="sm">{getPinTitle(pin)}</PopoverHeader>
+                                          <PopoverBody fontSize="sm" bg="white"><Text color="gray.700">{pin.texto || "Sem observações."}</Text><HStack spacing={2} mt={3}><Button size="xs" colorScheme="blue" variant="outline" leftIcon={<EditIcon />} width="50%" onClick={() => handleEditPin(pin)}>Editar</Button><Button size="xs" colorScheme="red" variant="outline" leftIcon={<DeleteIcon />} width="50%" onClick={() => removerPin(pin.id)}>Excluir</Button></HStack></PopoverBody>
                                       </PopoverContent>
                                   </Portal>
                               </Popover>
@@ -486,81 +588,141 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                 </ModalContent>
               </Modal>
 
-              {/* MODAL DE NOVO APONTAMENTO (LADO A LADO - SPLIT VIEW) */}
-              <Modal isOpen={isOpen} onClose={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }} size="4xl" isCentered>
-                <ModalOverlay backdropFilter="blur(2px)"/>
-                <ModalContent borderRadius="xl" overflow="hidden">
-                  <ModalHeader fontSize="md" borderBottom="1px solid" borderColor="gray.100" bg="gray.50">
-                    <HStack justify="space-between" w="full" pr={8}>
-                        <Text>{editingPinId ? 'Editar Apontamento' : 'Novo Apontamento'}</Text>
-                        {/* ABAS OBRIGADAS A FICAREN NUMA LINHA SÓ COM SCROLL INVISIVEL SE PRECISO */}
-                        <Flex gap={2} w="max-content" bg="white" p={1} borderRadius="md" border="1px solid" borderColor="gray.200">
-                            {compsAtuais.map(c => {
-                                const isSelected = pinCompetencia === c.id;
-                                const baseColor = c.cor === 'black' ? 'gray' : c.cor.split('.')[0];
-                                const labelText = c.id === 0 ? 'OUTROS' : `COMP ${c.id}`;
-                                return (
-                                  <Button 
-                                      key={c.id} size="sm" flexShrink={0} colorScheme={baseColor} variant={isSelected ? 'solid' : 'ghost'}
-                                      bg={isSelected && c.cor === 'black' ? 'black' : undefined} color={isSelected && c.cor === 'black' ? 'white' : undefined}
-                                      _hover={c.cor === 'black' && !isSelected ? { bg: 'gray.100' } : undefined}
-                                      onClick={() => { setPinCompetencia(c.id); setPinTexto(''); setBuscaGabaritoPin(''); }}
-                                  >
-                                      {labelText}
-                                  </Button>
-                                );
-                            })}
-                        </Flex>
+              {/* JANELA FLUTUANTE DE APONTAMENTO */}
+              <Modal 
+                  isOpen={isOpen} 
+                  onClose={() => { setCurrentBox(null); setEditingPinId(null); onClose(); setIsPinModalMinimized(false); setModalPos({x:0, y:0}); }} 
+                  size="3xl" 
+                  isCentered={true}
+                  trapFocus={false}
+                  blockScrollOnMount={false}
+                  closeOnOverlayClick={false}
+              >
+                <ModalOverlay bg="transparent" pointerEvents="none" />
+                
+                <ModalContent 
+                    className="floating-modal-container"
+                    borderRadius="xl"
+                    boxShadow="dark-lg"
+                    pointerEvents="auto"
+                    position="relative"
+                    left={`${modalPos.x}px`}
+                    top={`${modalPos.y}px`}
+                    bg="white"
+                >
+                  <ModalHeader 
+                      fontSize="md" 
+                      borderBottom={isPinModalMinimized ? "none" : "1px solid"} 
+                      borderColor="gray.100" 
+                      bg="gray.50" 
+                      py={3}
+                      borderTopRadius="xl"
+                      borderBottomRadius={isPinModalMinimized ? "xl" : "0"}
+                      cursor={isDraggingModal ? "grabbing" : "grab"}
+                      onPointerDown={handleModalPointerDown}
+                      onPointerMove={handleModalPointerMove}
+                      onPointerUp={handleModalPointerUp}
+                      onPointerCancel={handleModalPointerUp}
+                  >
+                    <HStack justify="space-between" w="full">
+                        <Box overflowX="auto" css={{ '&::-webkit-scrollbar': { display: 'none' } }} pointerEvents="auto">
+                            <Flex gap={2} w="max-content">
+                                {compsAtuais.map(c => {
+                                    const isSelected = pinCompetencia === c.id;
+                                    const baseColor = c.cor === 'black' ? 'gray' : c.cor.split('.')[0];
+                                    const labelText = c.id === 0 ? 'OUTROS' : `COMP ${c.id}`;
+                                    return (
+                                      <Button 
+                                          key={c.id} size="sm" flexShrink={0} colorScheme={baseColor} variant={isSelected ? 'solid' : 'ghost'}
+                                          bg={isSelected && c.cor === 'black' ? 'black' : undefined} color={isSelected && c.cor === 'black' ? 'white' : undefined}
+                                          _hover={c.cor === 'black' && !isSelected ? { bg: 'gray.100' } : undefined}
+                                          onClick={(e) => { e.stopPropagation(); setPinCompetencia(c.id); setPinTexto(''); setBuscaGabaritoPin(''); setIsPinModalMinimized(false); }}
+                                      >
+                                          {labelText}
+                                      </Button>
+                                    );
+                                })}
+                            </Flex>
+                        </Box>
+                        
+                        <HStack spacing={1} bg="gray.200" borderRadius="md" p={1} pointerEvents="auto">
+                            <Tooltip label={isPinModalMinimized ? "Expandir Modal" : "Minimizar (Persiana)"} placement="top" hasArrow>
+                                <IconButton size="xs" variant="ghost" colorScheme="gray" icon={isPinModalMinimized ? <ChevronDownIcon boxSize={5}/> : <ChevronUpIcon boxSize={5}/>} onClick={(e) => { e.stopPropagation(); setIsPinModalMinimized(!isPinModalMinimized); }} aria-label="Minimizar/Expandir" />
+                            </Tooltip>
+                            <Tooltip label="Fechar" placement="top" hasArrow>
+                                <IconButton size="xs" variant="ghost" colorScheme="red" icon={<CloseIcon boxSize={2.5}/>} onClick={(e) => { e.stopPropagation(); setCurrentBox(null); setEditingPinId(null); onClose(); setIsPinModalMinimized(false); setModalPos({x:0, y:0}); }} aria-label="Fechar" />
+                            </Tooltip>
+                        </HStack>
                     </HStack>
                   </ModalHeader>
-                  <ModalCloseButton />
-                  <ModalBody py={6}>
-                    
-                    <Flex gap={6} align="stretch" h="full">
-                        {/* ESQUERDA: LISTA DE GABARITOS COMPACTA */}
-                        <Box w="40%" display="flex" flexDirection="column" borderRight="1px solid" borderColor="gray.100" pr={6}>
-                            <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={3} textTransform="uppercase">Gabarito Rápido</Text>
-                            {pinCompetencia === 0 ? (
-                                <Text fontSize="sm" color="gray.400" fontStyle="italic" textAlign="center" mt={10}>A categoria OUTROS é de uso livre. Não existem gabaritos pré-configurados.</Text>
-                            ) : (
-                                <>
-                                    <InputGroup size="sm" mb={3}>
-                                        <InputLeftElement pointerEvents="none"><SearchIcon color="gray.400" /></InputLeftElement>
-                                        <Input placeholder="Procurar erro..." bg="gray.50" value={buscaGabaritoPin} onChange={(e) => setBuscaGabaritoPin(e.target.value)} />
-                                    </InputGroup>
+                  
+                  {!isPinModalMinimized && (
+                      <ModalBody py={5} bg="white" borderBottomRadius="xl">
+                        <Flex gap={6} align="stretch" h="full">
+                            {/* ESQUERDA: LISTA DE GABARITOS COMPACTA */}
+                            <Box w="45%" display="flex" flexDirection="column" borderRight="1px solid" borderColor="gray.100" pr={6}>
+                                
+                                {/* NOVOS BOTÕES DE FILTRO: ERRO VS ELOGIO */}
+                                <Flex justify="space-between" align="center" mb={3}>
+                                    <Text fontSize="xs" fontWeight="bold" color="gray.500" textTransform="uppercase">Gabarito Rápido</Text>
+                                    <HStack bg="gray.100" p={1} borderRadius="md">
+                                        <Button size="xs" variant={tipoGabaritoView === 'ERRO' ? 'solid' : 'ghost'} colorScheme={tipoGabaritoView === 'ERRO' ? 'red' : 'gray'} onClick={() => setTipoGabaritoView('ERRO')}>ERROS</Button>
+                                        <Button size="xs" variant={tipoGabaritoView === 'ELOGIO' ? 'solid' : 'ghost'} colorScheme={tipoGabaritoView === 'ELOGIO' ? 'green' : 'gray'} onClick={() => setTipoGabaritoView('ELOGIO')}>ELOGIOS</Button>
+                                    </HStack>
+                                </Flex>
 
-                                    <Box flex="1" overflowY="auto" pr={2} h="220px" css={{ '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { background: '#cbd5e0', borderRadius: '4px' } }}>
-                                        {gabaritoPins.filter(p => p.competencia === pinCompetencia && (p.titulo.toLowerCase().includes(buscaGabaritoPin.toLowerCase()) || p.texto.toLowerCase().includes(buscaGabaritoPin.toLowerCase()))).map(p => {
-                                            const compConfig = compsAtuais.find(c => c.id === pinCompetencia);
-                                            return (
-                                                <Tooltip key={p.id} label={p.texto} hasArrow placement="right" bg="gray.700" color="white" fontSize="xs" px={3} py={2} borderRadius="md" maxW="250px">
-                                                    <Flex align="center" justify="space-between" py={2} px={2} borderBottom="1px solid" borderColor="gray.100" cursor="pointer" _hover={{ bg: `${compConfig?.cor.split('.')[0]}.50`, borderRadius: 'md' }} onClick={() => setPinTexto(prev => prev ? prev + '\n' + p.texto : p.texto)}>
-                                                        <Text fontSize="sm" color="gray.700" fontWeight="medium" isTruncated>{p.titulo}</Text>
-                                                        <Icon as={AddIcon} boxSize={3} color="gray.400" />
-                                                    </Flex>
-                                                </Tooltip>
-                                            );
-                                        })}
-                                        {gabaritoPins.filter(p => p.competencia === pinCompetencia && (p.titulo.toLowerCase().includes(buscaGabaritoPin.toLowerCase()) || p.texto.toLowerCase().includes(buscaGabaritoPin.toLowerCase()))).length === 0 && (
-                                            <Text fontSize="xs" color="gray.400" textAlign="center" mt={4}>Nenhum erro encontrado na pesquisa.</Text>
-                                        )}
-                                    </Box>
-                                </>
-                            )}
-                        </Box>
+                                {pinCompetencia === 0 ? (
+                                    <Text fontSize="sm" color="gray.400" fontStyle="italic" textAlign="center" mt={6}>A categoria OUTROS é de uso livre. Sem gabaritos pré-definidos.</Text>
+                                ) : (
+                                    <>
+                                        <InputGroup size="sm" mb={3}>
+                                            <InputLeftElement pointerEvents="none"><SearchIcon color="gray.400" /></InputLeftElement>
+                                            <Input placeholder="Procurar..." bg="gray.50" value={buscaGabaritoPin} onChange={(e) => setBuscaGabaritoPin(e.target.value)} />
+                                        </InputGroup>
 
-                        {/* DIREITA: CAIXA DE TEXTO */}
-                        <Box w="60%" display="flex" flexDirection="column">
-                            <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={3} textTransform="uppercase">Observação Final do Balão</Text>
-                            <Textarea flex="1" size="sm" value={pinTexto} onChange={(e) => setPinTexto(e.target.value)} placeholder="O texto adicionado no gabarito aparecerá aqui. Podes complementá-lo livremente..." bg="gray.50" resize="none" _focus={{ bg: "white", borderColor: "blue.400" }} />
-                        </Box>
-                    </Flex>
+                                        <Box flex="1" overflowY="auto" pr={2} maxH="170px" css={{ '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { background: '#cbd5e0', borderRadius: '4px' } }}>
+                                            {gabaritoPins.filter(p => 
+                                                p.competencia === pinCompetencia && 
+                                                (p.tipo === tipoGabaritoView || (!p.tipo && tipoGabaritoView === 'ERRO')) &&
+                                                ((p.titulo || '').toLowerCase().includes(buscaGabaritoPin.toLowerCase()) || (p.texto || '').toLowerCase().includes(buscaGabaritoPin.toLowerCase()))
+                                            ).map(p => {
+                                                const compConfig = compsAtuais.find(c => c.id === pinCompetencia);
+                                                return (
+                                                    <Tooltip key={p.id} label={p.texto} hasArrow placement="right" bg="gray.700" color="white" fontSize="xs" px={3} py={2} borderRadius="md" maxW="250px">
+                                                        <Flex align="center" justify="space-between" py={2} px={2} borderBottom="1px solid" borderColor="gray.50" cursor="pointer" _hover={{ bg: `${compConfig?.cor.split('.')[0]}.50`, borderRadius: 'md' }} onClick={() => setPinTexto(prev => prev ? prev + '\n' + p.texto : p.texto)}>
+                                                            <Text fontSize="sm" color="gray.700" fontWeight="medium" isTruncated>{p.titulo}</Text>
+                                                            <Icon as={AddIcon} boxSize={3} color={`${compConfig?.cor.split('.')[0]}.400`} />
+                                                        </Flex>
+                                                    </Tooltip>
+                                                );
+                                            })}
+                                            {gabaritoPins.filter(p => 
+                                                p.competencia === pinCompetencia && 
+                                                (p.tipo === tipoGabaritoView || (!p.tipo && tipoGabaritoView === 'ERRO')) &&
+                                                ((p.titulo || '').toLowerCase().includes(buscaGabaritoPin.toLowerCase()) || (p.texto || '').toLowerCase().includes(buscaGabaritoPin.toLowerCase()))
+                                            ).length === 0 && (
+                                                <Text fontSize="xs" color="gray.400" textAlign="center" mt={4}>
+                                                    Nenhum {tipoGabaritoView.toLowerCase()} encontrado.
+                                                </Text>
+                                            )}
+                                        </Box>
+                                    </>
+                                )}
+                            </Box>
 
-                  </ModalBody>
-                  <ModalFooter bg="gray.50" borderTop="1px solid" borderColor="gray.100">
-                    <Button size="sm" variant="ghost" mr={3} onClick={() => { setCurrentBox(null); setEditingPinId(null); onClose(); }}>Cancelar</Button>
-                    <Button size="sm" colorScheme="blue" onClick={salvarPin}>Salvar Apontamento</Button>
-                  </ModalFooter>
+                            {/* DIREITA: CAIXA DE TEXTO E BOTÕES SUBIDOS */}
+                            <Box w="55%" display="flex" flexDirection="column">
+                                <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={3} textTransform="uppercase">Observação Final do Balão</Text>
+                                <Textarea flex="1" size="sm" value={pinTexto} onChange={(e) => setPinTexto(e.target.value)} placeholder={`O texto do apontamento aparecerá aqui...`} bg="gray.50" resize="none" _focus={{ bg: "white", borderColor: "blue.400" }} minH="120px" mb={4} />
+                                
+                                <Flex justify="flex-end" gap={3}>
+                                    <Button size="sm" variant="ghost" onClick={() => { setCurrentBox(null); setEditingPinId(null); onClose(); setIsPinModalMinimized(false); setModalPos({x:0, y:0}); }}>Cancelar</Button>
+                                    <Button size="sm" colorScheme="blue" onClick={salvarPin}>Salvar Apontamento</Button>
+                                </Flex>
+                            </Box>
+                        </Flex>
+                      </ModalBody>
+                  )}
                 </ModalContent>
               </Modal>
 
@@ -660,14 +822,23 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
         );
     }
 
-    let listaGeral = fila.filter(r => r.status !== 'REFAZER' && r.status !== 'CORRIGIDA' && r.status !== 'EM_QA').filter(r => {
+    const currentUserId = usuario?.id ? String(usuario.id) : null;
+
+    // Apenas redações devolvidas pela coordenação ficam na tabela de Cima
+    const listaPendencias = fila.filter(r => r.status === 'REFAZER' && String(r.corretor_atual) === currentUserId);
+
+    // Fila Geral mostra as novas E também a redação em andamento do corretor atual
+    let listaGeral = fila.filter(r => {
+        const isAguardando = r.status === 'AGUARDANDO';
+        const isMinhaEmCorrecao = r.status === 'EM_CORRECAO' && String(r.corretor_atual) === currentUserId;
+        return isAguardando || isMinhaEmCorrecao;
+    }).filter(r => {
         const match = r.tema_titulo.toLowerCase().includes(filtroTexto.toLowerCase()) || (r.id && r.id.toString().includes(filtroTexto.toLowerCase()));
         const matchTipo = filtroTipo === 'TODOS' ? true : (r.tema_tipo || r.tipo || 'ENEM').toUpperCase() === filtroTipo;
         if (somenteUrgentes && !r.is_urgente && !r.vip_pago) return false;
         return match && matchTipo;
     }).sort((a, b) => new Date(a.data_envio) - new Date(b.data_envio));
     
-    const listaPendencias = fila.filter(r => r.status === 'REFAZER');
     const qtdUrgentes = listaGeral.filter(r => r.is_urgente || r.vip_pago).length;
     const filaPaginada = listaGeral.slice((paginaAtualFila - 1) * itensPorPaginaFila, paginaAtualFila * itensPorPaginaFila);
 
@@ -680,7 +851,7 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
 
             {listaPendencias.length > 0 && (
                 <Box mb={8}>
-                    <Flex align="center" mb={3} gap={2}><WarningTwoIcon color="red.500" boxSize={5} animation="pulse 1.5s infinite" /><Heading size="md" color="red.600">Minhas Pendências (Urgente)</Heading></Flex>
+                    <Flex align="center" mb={3} gap={2}><WarningTwoIcon color="red.500" boxSize={5} animation="pulse 1.5s infinite" /><Heading size="md" color="red.600">Minhas Pendências</Heading></Flex>
                     <Card bg="red.50" shadow="md" borderRadius="lg" overflow="hidden" border="1px solid" borderColor="red.200">
                         <Box overflowX="auto">
                             <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
@@ -689,8 +860,11 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                                     {listaPendencias.map(r => (
                                         <Tr key={r.id} _hover={{ bg: 'red.100' }}>
                                             <Td fontWeight="bold" color="red.700" px={4}>#{r.id}</Td><Td fontWeight="medium" isTruncated px={4}>{r.tema_titulo}</Td><Td px={3} textAlign="center"><Badge bg="red.200" color="red.800">{r.tema_tipo || 'ENEM'}</Badge></Td>
-                                            <Td px={3} textAlign="center"><Badge colorScheme="red">REFAÇÃO</Badge></Td><Td px={3} textAlign="center"><Badge colorScheme="red" variant="solid">AGORA</Badge></Td>
-                                            <Td px={4} textAlign="center"><Button size="sm" colorScheme="red" leftIcon={<EditIcon />} onClick={() => pegarRedacao(r.id)} shadow="md" animation="pulse 1.5s infinite">Ajustar Nota</Button></Td>
+                                            <Td px={3} textAlign="center"><Badge colorScheme="red">REFAÇÃO</Badge></Td>
+                                            <Td px={3} textAlign="center"><Badge colorScheme="red" variant="solid">AGORA</Badge></Td>
+                                            <Td px={4} textAlign="center">
+                                                <Button size="sm" colorScheme="red" leftIcon={<EditIcon />} onClick={() => pegarRedacao(r.id)} shadow="md" animation="pulse 1.5s infinite">Ajustar Nota</Button>
+                                            </Td>
                                         </Tr>
                                     ))}
                                 </Tbody>
@@ -723,27 +897,36 @@ const AbaCorretorFila = ({ fila, carregarFila, usuario, carregarHistorico, carre
                         <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
                             <Thead bg="gray.50"><Tr><Th w="8%" px={4}>Cód.</Th><Th w="32%" px={4}>Tema</Th><Th w="15%" px={3} textAlign="center">Status</Th><Th w="15%" px={3} textAlign="center">Envio</Th><Th w="15%" px={3} textAlign="center">Ações</Th></Tr></Thead>
                             <Tbody>
-                              {filaPaginada.map(r => (
-                                <Tr key={r.id} _hover={{ bg: 'gray.50' }} bg={r.vip_pago || r.is_urgente ? 'purple.50' : 'transparent'}>
+                              {filaPaginada.map(r => {
+                                const minhaCorrecaoAtiva = r.status === 'EM_CORRECAO' && String(r.corretor_atual) === currentUserId;
+                                return (
+                                <Tr key={r.id} _hover={{ bg: 'gray.50' }} bg={minhaCorrecaoAtiva ? 'blue.50' : (r.vip_pago || r.is_urgente ? 'purple.50' : 'transparent')}>
                                   <Td fontWeight="bold" color="gray.700" px={4}>#{r.id}</Td>
                                   <Td px={4} isTruncated title={r.tema_titulo}><Text fontWeight="bold" fontSize="sm" color="gray.800" isTruncated>{r.tema_titulo}</Text><Text fontSize="xs" color="gray.500">Aluno: <strong>{r.aluno_nome || "Desconhecido"}</strong></Text></Td>
-                                  <Td px={3} textAlign="center"><Badge colorScheme={r.status === 'EM_CORRECAO' ? 'blue' : 'yellow'} borderRadius="md">{r.status.replace('_', ' ')}</Badge></Td>
+                                  <Td px={3} textAlign="center">
+                                      <Badge colorScheme={minhaCorrecaoAtiva ? 'blue' : 'yellow'} borderRadius="md">
+                                          {minhaCorrecaoAtiva ? 'EM CORREÇÃO' : 'AGUARDANDO'}
+                                      </Badge>
+                                  </Td>
                                   <Td px={3} textAlign="center">
                                     <Text fontSize="xs" color="gray.600">{new Date(r.data_envio).toLocaleDateString()}</Text>
                                     {r.vip_pago && <Badge colorScheme="purple" variant="solid" mt={1} fontSize="2xs"><StarIcon mr={1} mb={0.5}/> VIP PAGO</Badge>}
                                     {!r.vip_pago && r.is_urgente && <Badge colorScheme="red" variant="solid" mt={1} fontSize="2xs"><WarningIcon mr={1} mb={0.5}/> URGENTE</Badge>}
                                   </Td>
-                                  <Td px={3} textAlign="center"><Button size="sm" colorScheme={r.is_urgente || r.vip_pago ? 'purple' : 'teal'} leftIcon={<EditIcon />} onClick={() => pegarRedacao(r.id)} shadow="sm">Corrigir</Button></Td>
+                                  <Td px={3} textAlign="center">
+                                      <Button size="sm" colorScheme={r.is_urgente || r.vip_pago ? 'purple' : 'teal'} leftIcon={<EditIcon />} onClick={() => pegarRedacao(r.id)} shadow="sm" animation={minhaCorrecaoAtiva ? "pulse 1.5s infinite" : "none"}>Corrigir</Button>
+                                  </Td>
                                 </Tr>
-                              ))}
+                              )})}
                             </Tbody>
                         </Table>
                     </Box>
                 )}
                 {listaGeral.length > 0 && (
                     <Flex justify="space-between" align="center" p={4} bg="gray.50" borderTop="1px solid" borderColor="gray.200" wrap="wrap" gap={4}>
-                        <HStack><Text fontSize="sm" color="gray.600">Mostrar</Text><Select size="sm" w="80px" bg="white" value={itensPorPaginaFila} onChange={(e) => { setItensPorPaginaFila(Number(e.target.value)); setPaginaAtualFila(1); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></Select></HStack>
-                        <HStack><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.max(1, p - 1))} isDisabled={paginaAtualFila === 1} bg="white">Anterior</Button><Text fontSize="sm" fontWeight="bold" px={2}>{paginaAtualFila} / {Math.ceil(listaGeral.length / itensPorPaginaFila)}</Text><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.min(Math.ceil(listaGeral.length / itensPorPaginaFila), p + 1))} isDisabled={paginaAtualFila === Math.ceil(listaGeral.length / itensPorPaginaFila)} bg="white">Próxima</Button></HStack>
+                        <HStack><Text fontSize="sm" color="gray.600">Mostrar</Text><Select size="sm" w="80px" bg="white" value={itensPorPaginaFila} onChange={(e) => { setItensPorPaginaFila(Number(e.target.value)); setPaginaAtualFila(1); }}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></Select><Text fontSize="sm" color="gray.600">por página</Text></HStack>
+                        <Text fontSize="sm" color="gray.600" fontWeight="bold">Total de registros encontrados: {listaGeral.length}</Text>
+                        <HStack><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.max(1, p - 1))} isDisabled={paginaAtualFila === 1} bg="white" shadow="sm">Anterior</Button><Text fontSize="sm" fontWeight="bold" px={2}>{paginaAtualFila} / {Math.ceil(listaGeral.length / itensPorPaginaFila)}</Text><Button size="sm" onClick={() => setPaginaAtualFila(p => Math.min(Math.ceil(listaGeral.length / itensPorPaginaFila), p + 1))} isDisabled={paginaAtualFila === Math.ceil(listaGeral.length / itensPorPaginaFila)} bg="white" shadow="sm">Próxima</Button></HStack>
                     </Flex>
                 )}
             </Card>

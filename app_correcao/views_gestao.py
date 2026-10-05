@@ -247,6 +247,9 @@ class ResolverAuditoriaView(APIView):
                     
             elif acao == 'FALSO_POSITIVO_QA':
                 redacao.status = 'CORRIGIDA'
+                if correcao:
+                    correcao.comentario_geral = f"[FALSO POSITIVO QA]\n{mensagem}\n\n{correcao.comentario_geral or ''}"
+                    correcao.save()
                 
             elif acao == 'AJUSTAR_NOTA_PAGA':
                 redacao.status = 'CORRIGIDA'

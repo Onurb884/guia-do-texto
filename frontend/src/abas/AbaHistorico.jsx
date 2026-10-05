@@ -29,7 +29,10 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
     const historicoFiltrado = redacoes.filter(r => {
         const termoBusca = buscaHistorico.toLowerCase();
         const matchBusca = (r.tema_titulo || '').toLowerCase().includes(termoBusca) || String(r.id).includes(termoBusca);
-        const matchStatus = statusFiltro === 'TODOS' ? true : (statusFiltro === 'CORRIGIDA' ? (r.status === 'CORRIGIDA' || r.status === 'EM_QA') : r.status === statusFiltro);
+        
+        // CORREÇÃO: Filtra CORRIGIDA junto de FINALIZADA e EM_QA para garantir que a tabela do aluno está sintonizada.
+        const matchStatus = statusFiltro === 'TODOS' ? true : (statusFiltro === 'CORRIGIDA' ? ['CORRIGIDA', 'EM_QA', 'FINALIZADA'].includes(r.status) : r.status === statusFiltro);
+        
         const tipoRedacao = r.tema_tipo || r.tipo || 'ENEM';
         const matchTipo = tipoFiltro === 'TODOS' ? true : tipoRedacao.toUpperCase() === tipoFiltro;
         
@@ -51,7 +54,7 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
         if (status === 'AUDITORIA' || status === 'EM_AUDITORIA') return 'EM ANÁLISE';
         if (status === 'EM_RECURSO') return 'EM REVISÃO';
         if (status === 'TRIAGEM') return 'TRIAGEM TÉCNICA';
-        if (status === 'EM_QA') return 'CORRIGIDA';
+        if (status === 'EM_QA' || status === 'FINALIZADA') return 'CORRIGIDA';
         return status ? status.replace('_', ' ') : '';
     };
 
@@ -71,6 +74,7 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
     const getStatusBadge = (status) => {
         switch(status) {
             case 'CORRIGIDA': 
+            case 'FINALIZADA':
             case 'EM_QA': return <Badge colorScheme="green" borderRadius="md" px={2}>CORRIGIDA</Badge>;
             case 'DEVOLVIDA': return <Badge colorScheme="red" borderRadius="md" px={2}>DEVOLVIDA</Badge>;
             case 'ANULADA': return <Badge colorScheme="red" borderRadius="md" px={2}>ANULADA</Badge>;
@@ -158,7 +162,8 @@ const AbaHistorico = ({ redacoes, usuario, abrirFeedback, abrirMotivo }) => {
                                             {red.nota_final !== null && red.nota_final !== undefined ? red.nota_final : '-'}
                                         </Td>
                                         <Td px={4} textAlign="center">
-                                            {['CORRIGIDA', 'EM_QA'].includes(red.status) && (<Button size="sm" colorScheme="teal" variant="ghost" onClick={() => abrirFeedback(red.id)} leftIcon={<ViewIcon />}>Ver</Button>)}
+                                            {/* CORREÇÃO: Garante que o botão VER funciona também com FINALIZADA */}
+                                            {['CORRIGIDA', 'EM_QA', 'FINALIZADA'].includes(red.status) && (<Button size="sm" colorScheme="teal" variant="ghost" onClick={() => abrirFeedback(red.id)} leftIcon={<ViewIcon />}>Ver</Button>)}
                                             {(red.status === 'DEVOLVIDA' || red.status === 'ANULADA') && (<Button size="sm" colorScheme="red" variant="outline" onClick={() => abrirMotivo(red.id)} leftIcon={<WarningTwoIcon />}>Motivo</Button>)}
                                             {['AGUARDANDO', 'EM_CORRECAO', 'AUDITORIA', 'EM_AUDITORIA', 'REFAZER', 'EM_RECURSO', 'TRIAGEM'].includes(red.status) && (<Text fontSize="xs" color="gray.400">Em Análise</Text>)}
                                         </Td>

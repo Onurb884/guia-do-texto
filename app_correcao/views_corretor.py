@@ -45,16 +45,36 @@ class HistoricoCorretorView(APIView):
 
 class IniciarCorrecaoView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCorretor]
+    
     def post(self, request, pk):
         redacao = get_object_or_404(Redacao, pk=pk)
-        if redacao.status in ['EM_CORRECAO', 'REFAZER'] and redacao.corretor_atual and redacao.corretor_atual != request.user: return Response({"erro": "Já com outro corretor."}, status=409)
+        
+        # 1. Se já estiver com outro corretor
+        if redacao.status in ['EM_CORRECAO', 'REFAZER'] and redacao.corretor_atual and redacao.corretor_atual != request.user: 
+            return Response({"erro": "Já está com outro corretor."}, status=409)
+        
+        config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
+        minutos_base = config.tempo_limite_simples_minutos if (redacao.tema.tipo if redacao.tema else 'ENEM') in ['SIMPLES', 'PADRAO_100', 'PADRAO_10'] else config.tempo_limite_enem_minutos
+        
+        # 2. Se o corretor está apenas a tentar REABRIR uma redação que ele já pegou (continuação)
+        if redacao.status == 'EM_CORRECAO' and redacao.corretor_atual == request.user:
+            decorrido = (timezone.now() - redacao.data_inicio_correcao).total_seconds() / 60.0
+            minutos_restantes = max(1, minutos_base - decorrido)
+            return Response({"mensagem": "Reaberta com sucesso.", "minutos_limite": minutos_restantes}, status=200)
+
+        # 3. BLOQUEIO MULTI-ABAS SUPREMO: Se ele quer puxar uma NOVA, mas já tem uma em andamento!
+        if redacao.status == 'AGUARDANDO':
+            if Redacao.objects.filter(status='EM_CORRECAO', corretor_atual=request.user).exists():
+                return Response({"erro": "Você já possui uma redação em andamento na sua mesa! Conclua-a primeiro."}, status=400)
+
+        # 4. Se passou por todos os bloqueios, inicia a correção limpa!
         redacao.corretor_atual = request.user
-        if redacao.status != 'REFAZER': redacao.status = 'EM_CORRECAO'
+        if redacao.status != 'REFAZER': 
+            redacao.status = 'EM_CORRECAO'
         redacao.data_inicio_correcao = timezone.now()
         redacao.save()
-        config, _ = ConfiguracaoSistema.objects.get_or_create(id=1)
-        minutos = config.tempo_limite_simples_minutos if (redacao.tema.tipo if redacao.tema else 'ENEM') in ['SIMPLES', 'PADRAO_100', 'PADRAO_10'] else config.tempo_limite_enem_minutos
-        return Response({"mensagem": "Iniciada.", "minutos_limite": minutos}, status=200)
+        
+        return Response({"mensagem": "Iniciada.", "minutos_limite": minutos_base}, status=200)
 
 class LiberarCorrecaoView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCorretor]

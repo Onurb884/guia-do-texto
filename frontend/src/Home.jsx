@@ -195,7 +195,7 @@ const Home = () => {
         </Container>
       </Box>
 
-      {/* ================= PROVA SOCIAL / DEPOIMENTOS (NOVA SECÇÃO) ================= */}
+      {/* ================= PROVA SOCIAL / DEPOIMENTOS ================= */}
       <Box py={20} bg="teal.800" color="white">
         <Container maxW="container.xl">
             <VStack mb={16} textAlign="center">
@@ -326,8 +326,9 @@ const Home = () => {
           <Flex justify="space-between" align="center" wrap="wrap" fontSize="sm">
             <Text>© {new Date().getFullYear()} Guia do Texto. Todos os direitos reservados.</Text>
             <HStack spacing={4}>
-              <Text cursor="pointer" _hover={{ color: "white" }}>Termos de Uso</Text>
-              <Text cursor="pointer" _hover={{ color: "white" }}>Privacidade</Text>
+              {/* MODIFICADO AQUI: Adicionado RouterLink nas opções de Termos e Privacidade */}
+              <RouterLink to="/termos"><Text _hover={{ color: "white" }}>Termos de Uso</Text></RouterLink>
+              <RouterLink to="/privacidade"><Text _hover={{ color: "white" }}>Privacidade</Text></RouterLink>
             </HStack>
           </Flex>
         </Container>

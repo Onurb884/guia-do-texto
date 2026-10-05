@@ -99,7 +99,7 @@ function TorreControle() {
   const [filtroQA, setFiltroQA] = useState('TODOS'); 
   const [filtroCorretorQA, setFiltroCorretorQA] = useState('TODOS'); 
 
-  const [periodoFiltro, setPeriodoFiltro] = useState('MES_ATUAL');
+  const [periodoFiltro, setPeriodoFiltro] = useState('TUDO');
   const [dataInicioFila, setDataInicioFila] = useState('');
   const [dataFimFila, setDataFimFila] = useState('');
   
@@ -218,9 +218,18 @@ function TorreControle() {
   const listaTriagem = redacoes.filter(r => r.status === 'TRIAGEM');
   
   const listaQA = redacoes.filter(r => {
-      if (r.status !== 'EM_QA') return false;
-      const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
       const isMaAvaliacao = r.correcao?.avaliacao_aluno > 0;
+      const qaIgnorado = r.correcao?.comentario_geral?.includes('[FALSO POSITIVO QA]');
+      const qaRevisado = r.correcao?.comentario_geral?.includes('[NOTA REVISADA PELA COORDENAÇÃO]');
+      
+      // CRÍTICO: Se a redação já foi julgada pelo QA, esconde-a da lista!
+      const isResolvido = qaIgnorado || qaRevisado || r.status === 'REFAZER';
+      if (isResolvido) return false;
+      
+      // Se não estiver em QA nativo e não tiver má avaliação, não entra no QA
+      if (r.status !== 'EM_QA' && !isMaAvaliacao) return false;
+
+      const isPaga = r.foi_pago === true || String(r.foi_pago).toLowerCase() === 'true';
       const isAmostragem = !isMaAvaliacao;
       
       const corretorNomeStr = getCorretorNome(r);
@@ -273,6 +282,8 @@ function TorreControle() {
         const dInicio = dataInicioFila ? new Date(dataInicioFila + 'T00:00:00') : new Date('2000-01-01'); 
         const dFim = dataFimFila ? new Date(dataFimFila + 'T23:59:59') : new Date('2100-01-01'); 
         matchData = dataEnvio >= dInicio && dataEnvio <= dFim;
+    } else if (periodoFiltro === 'TUDO') {
+        matchData = true;
     }
 
     let matchSLA = true;
@@ -286,7 +297,6 @@ function TorreControle() {
   const idxUltimoTriagem = paginaAtualTriagem * itensPorPaginaTriagem; const idxPrimeiroTriagem = idxUltimoTriagem - itensPorPaginaTriagem; const triagemPaginada = listaTriagem.slice(idxPrimeiroTriagem, idxUltimoTriagem);
   const idxUltimoQA = paginaAtualQA * itensPorPaginaQA; const idxPrimeiroQA = idxUltimoQA - itensPorPaginaQA; const qaPaginada = listaQA.slice(idxPrimeiroQA, idxUltimoQA);
 
-  // INTERPRETADOR VISUAL (PARSER PREMIUM) DAS MENSAGENS E ALERTAS
   const renderAlertasTorre = (textoOriginal) => {
       if (!textoOriginal) return <Text fontSize="sm" color="gray.500">Sem observações ou alertas registrados.</Text>;
       
@@ -300,6 +310,10 @@ function TorreControle() {
       const blocos = finalParts.map((part, idx) => {
           let conteudo = part.trim();
           const tUpper = conteudo.toUpperCase();
+          
+          if (tUpper.includes("AVALIAÇÃO BAIXA DO ALUNO") || tUpper.includes("AVALIAÇÃO DO ALUNO") || tUpper.includes("ESTRELAS")) {
+              return null;
+          }
           
           let autor = "SISTEMA";
           let autorCor = "gray";
@@ -343,7 +357,7 @@ function TorreControle() {
               labelConteudo = "PARECER DA COORDENAÇÃO";
               conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
               
-          } else if (tUpper.includes("RECURSO ACEITE") || tUpper.includes("RECURSO NEGADO") || tUpper.includes("RESPOSTA AO RECURSO")) {
+          } else if (tUpper.includes("RECURSO ACEITO") || tUpper.includes("RECURSO NEGADO") || tUpper.includes("RESPOSTA AO RECURSO")) {
               autor = "COORDENAÇÃO"; autorCor = "purple";
               tipoAlerta = "VEREDITO DE RECURSO";
               colorScheme = "green";
@@ -357,6 +371,22 @@ function TorreControle() {
               colorScheme = "purple";
               iconeAlerta = RepeatIcon;
               labelConteudo = "PARECER DA COORDENAÇÃO";
+              conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
+          
+          // NOVAS TAGS PREMIUM PARA A RESOLUÇÃO DA QUALIDADE
+          } else if (tUpper.includes("FALSO POSITIVO QA")) {
+              autor = "COORDENAÇÃO"; autorCor = "purple";
+              tipoAlerta = "QA ENCERRADO (FALSO POSITIVO)";
+              colorScheme = "gray";
+              iconeAlerta = CheckCircleIcon;
+              labelConteudo = "PARECER DA COORDENAÇÃO";
+              conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
+          } else if (tUpper.includes("NOTA REVISADA PELA COORDENAÇÃO")) {
+              autor = "COORDENAÇÃO"; autorCor = "purple";
+              tipoAlerta = "NOTA AJUSTADA (QA)";
+              colorScheme = "green";
+              iconeAlerta = EditIcon;
+              labelConteudo = "JUSTIFICATIVA DA COORDENAÇÃO";
               conteudo = conteudo.replace(/\[.*?\]/g, '').trim();
           } else {
               const tagMatch = conteudo.match(/^\[(.*?)\]/) || conteudo.match(/^---\s*(.*?)\s*---/);
@@ -408,14 +438,15 @@ function TorreControle() {
     const numComps = isPadrao ? [1,2,3,4] : [1,2,3,4,5];
     const temCorrecaoFeita = redacaoAuditando.correcao && redacaoAuditando.correcao.competencias && redacaoAuditando.correcao.competencias.length > 0;
     
-    const isQA = redacaoAuditando.status === 'EM_QA' || redacaoAuditando.status === 'CORRIGIDA'; 
-    const isFalhaGrave = redacaoAuditando.status === 'EM_AUDITORIA';
-    const isRecurso = redacaoAuditando.status === 'EM_RECURSO' || redacaoAuditando.status === 'RECURSO';
-    const isTriagem = redacaoAuditando.status === 'TRIAGEM';
-    
     const isPaga = redacaoAuditando.foi_pago === true || String(redacaoAuditando.foi_pago).toLowerCase() === 'true';
     const avaliacaoEstrelas = redacaoAuditando.correcao?.avaliacao_aluno || 0;
     const avaliacaoTexto = redacaoAuditando.correcao?.comentario_avaliacao || '';
+
+    // QA considera tanto as marcadas explicitamente como EM_QA, quanto aquelas com avaliação do aluno.
+    const isQA = redacaoAuditando.status === 'EM_QA' || avaliacaoEstrelas > 0; 
+    const isFalhaGrave = redacaoAuditando.status === 'EM_AUDITORIA';
+    const isRecurso = redacaoAuditando.status === 'EM_RECURSO' || redacaoAuditando.status === 'RECURSO';
+    const isTriagem = redacaoAuditando.status === 'TRIAGEM';
     
     const notasPossiveisEdit = isPadrao10 ? [0, 0.5, 1, 1.5, 2, 2.5] : (isPadrao ? [0,5,10,15,20,25] : [0,40,80,120,160,200]);
     const compsDisponiveisEdit = isPadrao ? [1,2,3,4] : [1,2,3,4,5];
@@ -648,7 +679,7 @@ function TorreControle() {
                     <HStack mb={2}><EditIcon color="purple.600" /><Text fontSize="sm" fontWeight="bold" color="purple.700">2. Aceitar Recurso (Corretor Errou)</Text></HStack>
                     <Text fontSize="xs" color="purple.600" mb={3}>Devolve a redação ao CORRETOR para que ele ajuste as notas obrigatoriamente lendo a instrução abaixo.</Text>
                     <Textarea size="sm" value={mensagemAcao2} onChange={(e) => setMensagemAcao2(e.target.value)} rows={3} bg="white" placeholder="Instrução que será enviada ao CORRETOR para ele ajustar..." mb={3} />
-                    <Button w="full" colorScheme="purple" onClick={() => resolverAuditoria('RECURSO_ACEITE', mensagemAcao2)} isLoading={loadingAudit}>Exigir Refação do Corretor</Button>
+                    <Button w="full" colorScheme="purple" onClick={() => resolverAuditoria('RECURSO_ACEITO', mensagemAcao2)} isLoading={loadingAudit}>Exigir Refação do Corretor</Button>
                   </Box>
                 </VStack>
               )}
@@ -666,7 +697,7 @@ function TorreControle() {
                         <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
                           <HStack mb={2}><CheckCircleIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">Falso Positivo (Avaliação Injusta)</Text></HStack>
                           <Text fontSize="xs" color="gray.600" mb={3}>O corretor corrigiu corretamente. Ignore a má avaliação do aluno e encerre o QA.</Text>
-                          <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('FALSO_POSITIVO_QA', 'Avaliação do aluno foi considerada injusta. Nenhuma punição aplicada ao corretor.')} isLoading={loadingAudit}>Ignorar Má Avaliação</Button>
+                          <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('FALSO_POSITIVO_QA', 'Avaliação do aluno foi considerada injusta.')} isLoading={loadingAudit}>Ignorar Má Avaliação</Button>
                         </Box>
                     )}
                 </VStack>
@@ -703,7 +734,7 @@ function TorreControle() {
                       <Box p={4} border="1px solid" borderColor="gray.300" borderRadius="xl" bg="gray.50">
                         <HStack mb={2}><CheckCircleIcon color="gray.600" /><Text fontSize="sm" fontWeight="bold" color="gray.700">Falso Positivo (Avaliação Injusta)</Text></HStack>
                         <Text fontSize="xs" color="gray.600" mb={3}>O corretor corrigiu corretamente. Ignore a má avaliação do aluno e encerre o QA.</Text>
-                        <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('FALSO_POSITIVO_QA', 'Avaliação do aluno foi considerada injusta. Nenhuma punição aplicada ao corretor.')} isLoading={loadingAudit}>Ignorar Má Avaliação</Button>
+                        <Button w="full" colorScheme="gray" border="1px solid" borderColor="gray.400" onClick={() => resolverAuditoria('FALSO_POSITIVO_QA', 'Avaliação do aluno foi considerada injusta.')} isLoading={loadingAudit}>Ignorar Má Avaliação</Button>
                       </Box>
                   )}
                 </VStack>
@@ -808,11 +839,11 @@ function TorreControle() {
                 
                 <HStack spacing={2}>
                     <Select w="140px" size="sm" value={periodoFiltro} onChange={e => setPeriodoFiltro(e.target.value)}>
+                        <option value="TUDO">Todo o Período</option>
                         <option value="MES_ATUAL">Mês Atual</option>
                         <option value="MES_ANTERIOR">Mês Anterior</option>
                         <option value="HOJE">Hoje</option>
                         <option value="ONTEM">Ontem</option>
-                        <option value="TUDO">Todo o Período</option>
                         <option value="PERSONALIZADO">Personalizado...</option>
                     </Select>
                     {periodoFiltro === 'PERSONALIZADO' && (

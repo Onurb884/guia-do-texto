@@ -42,11 +42,12 @@ const SininhoNotificacoes = ({ notificacoesRecentes, lidasIds, marcarLida, abrir
                         <VStack align="stretch" spacing={0} divider={<Divider m={0} />}>
                             {notificacoesRecentes.map(n => {
                                 const isLida = lidasIds.includes(n.id);
+                                const isCorrigida = ['CORRIGIDA', 'EM_QA'].includes(n.status);
                                 return (
                                     <Box key={n.id} p={4} bg={isLida ? 'white' : 'blue.50'} cursor="pointer" onClick={() => { marcarLida(n.id); abrirFeedback(n.id); }}>
                                         <HStack mb={1}>
-                                            {n.status === 'CORRIGIDA' ? <CheckCircleIcon color="green.500" boxSize={3} /> : <WarningTwoIcon color="red.500" boxSize={3} />}
-                                            <Text fontSize="xs" fontWeight="bold" color={n.status === 'CORRIGIDA' ? 'green.600' : 'red.600'}>{n.status === 'CORRIGIDA' ? 'Redação Corrigida!' : 'Redação Atualizada'}</Text>
+                                            {isCorrigida ? <CheckCircleIcon color="green.500" boxSize={3} /> : <WarningTwoIcon color="red.500" boxSize={3} />}
+                                            <Text fontSize="xs" fontWeight="bold" color={isCorrigida ? 'green.600' : 'red.600'}>{isCorrigida ? 'Redação Corrigida!' : 'Redação Atualizada'}</Text>
                                         </HStack>
                                         <Text fontSize="sm" color={isLida ? 'gray.600' : 'gray.800'} fontWeight={isLida ? 'medium' : 'bold'} noOfLines={1}>{n.tema_titulo}</Text>
                                     </Box>
@@ -231,7 +232,10 @@ const PainelAluno = () => {
     };
 
     const parseDate = (r) => new Date(r.data_atualizacao ? r.data_atualizacao : r.data_envio).getTime();
-    const notificacoesRecentes = [...redacoes].filter(r => r.status === 'CORRIGIDA' || r.status === 'DEVOLVIDA' || r.status === 'ANULADA').sort((a, b) => parseDate(b) - parseDate(a)).slice(0, 8);
+    
+    // CORREÇÃO: O sininho agora avisa também das redações que estão EM_QA, porque o aluno merece ler o feedback
+    const notificacoesRecentes = [...redacoes].filter(r => ['CORRIGIDA', 'EM_QA', 'DEVOLVIDA', 'ANULADA'].includes(r.status)).sort((a, b) => parseDate(b) - parseDate(a)).slice(0, 8);
+    
     const marcarLida = (id) => { if(!lidasIds.includes(id)){ const n = [...lidasIds, id]; setLidasIds(n); localStorage.setItem('notificacoesLidas', JSON.stringify(n)); }};
 
     let titulo = "Painel do Aluno", subtitulo = "";

@@ -3,16 +3,12 @@ import { SimpleGrid, Card, Flex, Box, Heading, Text, Select, Grid, GridItem, Sta
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { InfoIcon } from '@chakra-ui/icons';
 
-// Dicas atualizadas para englobar os novos nomes de Competências Premium
 const DICAS_INTELIGENTES = {
-    // ENEM
     'C1 (Gramática)': 'Atenção à norma culta! Revise as regras de pontuação (especialmente vírgulas), crase e concordância.',
     'C2 (Tema)': 'Cuidado com o tangenciamento! Certifique-se de abordar todas as palavras-chave do tema na introdução.',
     'C3 (Argumentos)': 'Fortaleça sua argumentação! Evite apenas expor fatos; você precisa explicá-los.',
     'C4 (Coesão)': 'Melhore a ligação do seu texto! Use conectivos variados não apenas no início dos parágrafos, mas também dentro deles.',
     'C5 (Proposta)': 'Sua proposta de intervenção precisa estar mais completa. Detalhe: Quem fará? O que será feito? Como? Para quê?',
-    
-    // PADRÃO CONCURSOS (Simples, 100 e 10)
     'C1 (Norma Culta)': 'Atenção à norma culta! Revise as regras de ortografia, pontuação, crase e concordância.',
     'C2 (Tema/Estrutura)': 'Foque em estruturar bem o seu texto (introdução, desenvolvimento e conclusão) e não fuja das palavras-chave do tema.',
     'C3 (Argumentação)': 'Seus argumentos precisam ser mais sólidos. Tente desenvolver melhor suas ideias, trazendo fatos, causas e consequências.',
@@ -20,17 +16,15 @@ const DICAS_INTELIGENTES = {
 };
 
 const AbaDashboard = ({ redacoes }) => {
-    // Agora o Default começa na visão mais premium da plataforma (se quiser pode trocar para ENEM)
     const [filtroGraficoTipo, setFiltroGraficoTipo] = useState('ENEM');
     const [filtroPeriodo, setFiltroPeriodo] = useState('30D');
 
-    const redacoesCorrigidas = redacoes.filter(r => r.status === 'CORRIGIDA' && r.nota_final != null);
+    // CORREÇÃO AQUI: Inclui CORRIGIDA, EM_QA e FINALIZADA
+    const redacoesCorrigidas = redacoes.filter(r => ['CORRIGIDA', 'EM_QA', 'FINALIZADA'].includes(r.status) && r.nota_final != null);
     
     const redacoesGrafico = redacoesCorrigidas.filter(r => {
         const tipoOriginal = (r.tema_tipo || r.tipo || 'ENEM').toUpperCase();
-        // Agrupa "SIMPLES" e "PADRAO_100" no mesmo guarda-chuva lógico para os gráficos, pois a escala é a mesma.
         const tipoVisual = tipoOriginal === 'SIMPLES' ? 'PADRAO_100' : tipoOriginal;
-        
         const matchTipo = tipoVisual === filtroGraficoTipo;
         
         let matchTempo = true;
@@ -42,15 +36,12 @@ const AbaDashboard = ({ redacoes }) => {
             else if (filtroPeriodo === '1A') dataLimite.setFullYear(dataLimite.getFullYear() - 1);
             matchTempo = dataRed >= dataLimite;
         }
-        
         return matchTipo && matchTempo;
     });
 
-    // Matemática Segura para Decimais
     const somaNotas = redacoesGrafico.reduce((acc, r) => acc + parseFloat(r.nota_final), 0);
     const mediaGeralRaw = redacoesGrafico.length > 0 ? (somaNotas / redacoesGrafico.length) : 0;
     
-    // Arredondamentos e Formatações dependendo do padrão
     const isDecimal = filtroGraficoTipo === 'PADRAO_10';
     const mediaGeral = isDecimal ? mediaGeralRaw.toFixed(1) : Math.round(mediaGeralRaw);
     const maiorNotaAlcancadaRaw = redacoesGrafico.length > 0 ? Math.max(...redacoesGrafico.map(r => parseFloat(r.nota_final))) : 0;
@@ -64,7 +55,6 @@ const AbaDashboard = ({ redacoes }) => {
         nota: parseFloat(r.nota_final || 0) 
     }));
 
-    // Definição da Estrutura do Radar
     let radarData = [];
     if (filtroGraficoTipo === 'ENEM') {
         radarData = [ 

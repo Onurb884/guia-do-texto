@@ -4,12 +4,11 @@ import { Flex, Box } from '@chakra-ui/react';
 import GestaoMateriais from './GestaoMateriais';
 import GestaoGabarito from './GestaoGabarito';
 import Home from './Home';
+import Termos from './Termos';
+import Privacidade from './Privacidade';
 
 import axios from 'axios';
 
-// --- SEGURANÇA INVISÍVEL (Axios Interceptor) ---
-// Vigia todas as respostas do servidor. Se o token expirar (Erro 401),
-// ele limpa o cache silenciosamente e devolve o utilizador ao Login sem quebrar a tela.
 axios.interceptors.response.use(
   (response) => {
     // Se a resposta for sucesso, apenas deixa passar
@@ -53,11 +52,13 @@ import GestaoFinanceira from './GestaoFinanceira';
 function App() {
   const location = useLocation();
   
-  // Lista de todas as páginas públicas (sem barra lateral)
+  // CORREÇÃO: Adicionadas as rotas /termos e /privacidade na lista de exceções da Sidebar
   const hideSidebar = location.pathname === '/' || 
                       location.pathname === '/login' ||
                       location.pathname === '/cadastro' || 
                       location.pathname === '/trabalhe-conosco' || 
+                      location.pathname === '/termos' || 
+                      location.pathname === '/privacidade' || 
                       location.pathname === '/esqueceu-senha' || 
                       location.pathname.startsWith('/redefinir-senha');
   
@@ -92,12 +93,19 @@ function App() {
         transition="all 0.3s"
       >
         <Routes>
+          {/* ROTAS PÚBLICAS (Sem Sidebar) */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Cadastro />} />
+          <Route path="/termos" element={<Termos />} />
+          <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
+          <Route path='/esqueceu-senha' element={<EsqueceuSenha />} />
+          <Route path="/redefinir-senha/:uidb64/:token" element={<RedefinirSenha />} />
+
+          {/* ROTAS PRIVADAS (Com Sidebar) */}
           <Route path="/meu-perfil" element={<MeuPerfil />} />          
           <Route path="/dashboard" element={<Dashboard />} /> 
-          
           <Route path="/painel-aluno" element={<PainelAluno />} />
           <Route path="/painel-corretor" element={<PainelCorretor />} />
           <Route path="/temas" element={<GerenciarTemas />} />
@@ -106,9 +114,6 @@ function App() {
           <Route path="/corretor/respostas" element={<GerenciarRespostas />} />
           <Route path="/gestao-fila" element={<TorreControle />} /> 
           <Route path="/gestao-usuarios" element={<GestaoUsuarios />} /> 
-          <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
-          <Route path='/esqueceu-senha' element={<EsqueceuSenha />} />
-          <Route path="/redefinir-senha/:uidb64/:token" element={<RedefinirSenha />} />
           <Route path="/gestao-vitrine" element={<GestaoVitrine />} />
           <Route path="/gestao-financeira" element={<GestaoFinanceira />} />
         </Routes>

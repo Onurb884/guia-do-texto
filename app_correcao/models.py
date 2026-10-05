@@ -168,7 +168,6 @@ class BannerVitrine(models.Model):
     ativo = models.BooleanField(default=True)
     ordem = models.IntegerField(default=0)
     
-    # NOVOS CAMPOS PARA MARKETING PREMIUM
     link_destino = models.CharField(max_length=255, blank=True, null=True)
     texto_botao = models.CharField(max_length=50, blank=True, null=True)
     cor_pelicula = models.CharField(max_length=100, default='black')
@@ -212,9 +211,16 @@ class Transacao(models.Model):
     data_atualizacao = models.DateTimeField(auto_now=True)
 
 class GabaritoPin(models.Model):
+    # ADICIONADO O CAMPO TIPO COM OPÇÕES 'ERRO' E 'ELOGIO'
+    TIPO_PIN_CHOICES = (
+        ('ERRO', 'Erro/Desvio'),
+        ('ELOGIO', 'Elogio/Destaque'),
+    )
+    
     competencia = models.IntegerField(help_text="0 para OUTROS, 1 a 5 para as competências")
+    tipo = models.CharField(max_length=10, choices=TIPO_PIN_CHOICES, default='ERRO')
     titulo = models.CharField(max_length=50)
     texto = models.TextField()
 
     def __str__(self):
-        return f"C{self.competencia} - {self.titulo}"
+        return f"C{self.competencia} - [{self.tipo}] {self.titulo}"
